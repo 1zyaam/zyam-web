@@ -44,12 +44,11 @@ export default function Logo({ onTripleTap }) {
       aria-label="Zyam Web — home"
       className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none"
     >
-      <span
-        aria-hidden="true"
-        className="logo-mark flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-100 via-brand-200 to-brand-300 shadow-pill ring-1 ring-brand-300/60 dark:ring-night-border"
-      >
-        <span className="font-display text-[22px] font-bold leading-none text-brand-900">Z</span>
-      </span>
+      <img
+        src="/logo-mark.png"
+        alt="Zyam Web logo"
+        className="logo-mark h-9 w-9 shrink-0 rounded-[8px] object-cover ring-1 ring-black/10 dark:ring-white/10"
+      />
       <span className="logo-word font-display text-lg font-semibold tracking-wide text-ink dark:text-white">
         ZYAM&nbsp;WEB
       </span>

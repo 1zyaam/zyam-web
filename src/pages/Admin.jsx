@@ -393,7 +393,15 @@ function AdminTopBar({ activeTab, onSelect, onOpenPalette, onRefresh, bellCount,
   return (
     <header className="sticky top-4 z-40 flex h-20 items-center gap-2 rounded-full bg-vessa-card/90 px-4 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 backdrop-blur-md dark:bg-vessa-darkCard/90 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="logo-mark-copper flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-vessa-copper text-lg font-bold text-white dark:bg-vessa-peach dark:text-[#2b0f03]">Z</span>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          aria-label="Zyam Web — home"
+          title="Back to home"
+          className="logo-mark-copper h-10 w-10 shrink-0 overflow-hidden rounded-[10px] ring-1 ring-white/20 focus-visible:outline-none"
+        >
+          <img src="/logo-mark.png" alt="Zyam Web logo" className="h-full w-full object-cover" />
+        </button>
         <span className="hidden leading-tight sm:block">
           <span className="block text-sm font-bold tracking-wide">ZYAM WEB</span>
           <span className="block text-[11px] text-[#56615a] dark:text-[#a8b4ad]">Owner console</span>
@@ -551,7 +559,7 @@ export default function Admin() {
   const navigate = useNavigate()
 
   // ---- Gate state ----
-  const [gate, setGate] = useState('checking') // 'checking' | 'gate' | 'admin'
+  const [gate, setGate] = useState('checking') // 'checking' | 'gate' | 'locked' | 'admin'
   const [email, setEmail] = useState(import.meta.env.VITE_ADMIN_EMAIL || '')
   const [password, setPassword] = useState('')
   const [gateError, setGateError] = useState('')
@@ -593,7 +601,10 @@ export default function Admin() {
   const [savingAd, setSavingAd] = useState(false)
 
   // ---- Gate: verify a signed-in user is the admin ----
-  async function verifyAdmin(user) {
+  // With requireUnlock, a valid session only reaches the 'locked' screen —
+  // the password is ALWAYS asked before the dashboard opens, so a saved
+  // session alone can never walk straight into the admin panel.
+  async function verifyAdmin(user, requireUnlock = false) {
     const { data, error: settingsError } = await supabase
       .from('settings')
       .select('admin_user_id')
@@ -611,7 +622,7 @@ export default function Admin() {
       return false
     }
     setAdminEmail(user.email || '')
-    setGate('admin')
+    setGate(requireUnlock ? 'locked' : 'admin')
     return true
   }
 
@@ -622,8 +633,8 @@ export default function Admin() {
     }
     supabase.auth.getSession().then(async ({ data }) => {
       if (data?.session?.user) {
-        const ok = await verifyAdmin(data.session.user)
-        if (ok) loadAll()
+        // Signed in already — still ask for the password (locked screen).
+        await verifyAdmin(data.session.user, true)
       } else {
         setGate('gate')
       }
@@ -655,6 +666,30 @@ export default function Admin() {
     setSigningIn(false)
     if (signInError || !data?.user) {
       setGateError('Wrong password / not admin. Check the email and password and try again.')
+      return
+    }
+    const ok = await verifyAdmin(data.user)
+    if (!ok) {
+      // Signed in, but not the admin — sign straight back out so the gate stays clean.
+      await supabase.auth.signOut()
+      return
+    }
+    setPassword('')
+    loadAll()
+  }
+
+  // Unlock from the 'locked' screen: a saved session still needs the password.
+  async function handleUnlock(e) {
+    e.preventDefault()
+    setGateError('')
+    setSigningIn(true)
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: adminEmail,
+      password
+    })
+    setSigningIn(false)
+    if (signInError || !data?.user) {
+      setGateError('Wrong password. Try again.')
       return
     }
     const ok = await verifyAdmin(data.user)
@@ -922,12 +957,55 @@ export default function Admin() {
     return (
       <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg font-vessa px-4 py-16 dark:bg-vessa-darkBg">
         <div className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] w-full max-w-md">
-          <h1 className="text-2xl font-semibold">Admin sign in</h1>
+          <img src="/logo-mark.png" alt="Zyam Web" className="logo-mark-copper h-12 w-12 rounded-[10px] ring-1 ring-black/10 dark:ring-white/10" />
+          <h1 className="mt-4 text-2xl font-semibold">Admin sign in</h1>
           <p className="mt-2 text-sm text-[#56615a] dark:text-[#a8b4ad]">
             This area is for the Zyam Web owner only. Sign in with the admin account.
           </p>
           {gate === 'checking' ? (
             <p className="mt-6 text-sm text-[#56615a] dark:text-[#a8b4ad]">Checking your session…</p>
+          ) : gate === 'locked' ? (
+            <form onSubmit={handleUnlock} className="mt-6 space-y-4">
+              <div className="rounded-xl bg-black/[0.04] dark:bg-white/5 px-3 py-2.5 text-sm">
+                Signed in as <strong>{adminEmail}</strong> — enter your password to unlock.
+              </div>
+              <div>
+                <label htmlFor="admin-password" className="block text-sm font-medium">Password</label>
+                <input
+                  id="admin-password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="mt-1 w-full rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50"
+                />
+              </div>
+              {gateError && (
+                <p role="alert" className="rounded-xl bg-rose-50 dark:bg-rose-900/30 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">
+                  {gateError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={signingIn}
+                className="w-full rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#2b0f03] dark:hover:bg-vessa-peachLight"
+              >
+                {signingIn ? 'Unlocking…' : 'Unlock admin'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase.auth.signOut()
+                  setPassword('')
+                  setGateError('')
+                  setGate('gate')
+                }}
+                className="w-full text-center text-sm text-vessa-copper dark:text-vessa-peach hover:underline"
+              >
+                Use a different account
+              </button>
+            </form>
           ) : (
             <form onSubmit={handleSignIn} className="mt-6 space-y-4">
               <div>

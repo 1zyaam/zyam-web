@@ -63,7 +63,7 @@ body * {
   }
 }
 
-/* ---- Logo motion (Z mark: pop-in + gentle float + hover glow) ---- */
+/* ---- Logo motion (Z mark: pop-in + gentle float + glow pulse) ---- */
 @keyframes logo-pop {
   0% { transform: scale(0.55) rotate(-16deg); opacity: 0; }
   60% { transform: scale(1.1) rotate(4deg); opacity: 1; }
@@ -71,25 +71,31 @@ body * {
 }
 @keyframes logo-float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2.5px); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes logo-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--logo-glow-ring, rgba(124, 58, 237, 0)); }
+  50% { box-shadow: 0 0 0 5px var(--logo-glow-ring, rgba(124, 58, 237, 0.18)); }
 }
 @keyframes logo-word-in {
   from { opacity: 0; transform: translateX(-6px); }
   to { opacity: 1; transform: translateX(0); }
 }
+.logo-mark {
+  --logo-glow-ring: rgba(124, 58, 237, 0.18);
+}
+.logo-mark-copper {
+  --logo-glow-ring: rgba(168, 72, 28, 0.22);
+}
 .logo-mark,
 .logo-mark-copper {
-  animation: logo-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards, logo-float 4.5s ease-in-out 0.8s infinite;
+  animation: logo-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards, logo-float 3.5s ease-in-out 0.8s infinite, logo-glow 3.5s ease-in-out 0.8s infinite;
   will-change: transform;
-  transition: filter 0.25s ease, box-shadow 0.25s ease;
+  transition: filter 0.25s ease;
 }
-.logo-mark:hover {
-  filter: brightness(1.07);
-  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18), 0 8px 20px -8px rgba(124, 58, 237, 0.45);
-}
+.logo-mark:hover,
 .logo-mark-copper:hover {
-  filter: brightness(1.07);
-  box-shadow: 0 0 0 4px rgba(168, 72, 28, 0.22), 0 8px 20px -8px rgba(168, 72, 28, 0.45);
+  filter: brightness(1.08);
 }
 .logo-word {
   animation: logo-word-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards;
