@@ -11,6 +11,10 @@ export const PLANS = {
   paid: { name: 'Paid', price: 1999, offer: 1199 }
 }
 
+/** Free plan limits — Paid is unlimited. One "item" is a product (store),
+ *  a project (freelancer) or a bio link (influencer). */
+export const FREE_ITEM_LIMIT = 5
+
 /** How clients pay for the Paid plan: JazzCash, manual verification. */
 export const PAYMENT = {
   method: 'JazzCash',

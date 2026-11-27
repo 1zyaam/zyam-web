@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { FREEZE_DAYS, PAYMENT, PLANS, THEMES, daysSince, formatPKR, timeAgo, whatsappLink } from '../lib/store'
+import { FREEZE_DAYS, FREE_ITEM_LIMIT, PAYMENT, PLANS, THEMES, daysSince, formatPKR, timeAgo, whatsappLink } from '../lib/store'
 import SwatchStrip from '../components/SwatchStrip.jsx'
 
 const inputCls =
@@ -258,6 +258,10 @@ export default function Dashboard() {
           style: form.style || 'default'
         }
       }
+      if (!editingId && atItemLimit) {
+        setError(`Free plan allows up to ${FREE_ITEM_LIMIT} ${itemLabel}s. Upgrade to Paid for unlimited ${itemLabel}s.`)
+        return
+      }
       let result
       if (editingId) {
         result = await supabase.from(itemTable).update(payload).eq('id', editingId).select().single()
@@ -366,6 +370,7 @@ export default function Dashboard() {
   const inactiveDays = daysSince(account.last_active_at)
   const daysRemaining = account.plan === 'free' ? Math.max(0, FREEZE_DAYS - inactiveDays) : null
   const plan = PLANS[account.plan] || PLANS.free
+  const atItemLimit = account.plan !== 'paid' && items.length >= FREE_ITEM_LIMIT
   const pendingReceipt = receipts.find((r) => r.status === 'pending')
   const lastRejected = receipts.find((r) => r.status === 'rejected')
   const publicUrl = `/s/${account.slug}`
@@ -564,10 +569,17 @@ export default function Dashboard() {
           {!form && (
             <button
               onClick={startAdd}
-              className="rounded-full bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              disabled={atItemLimit}
+              className="rounded-full bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               + Add {itemLabel}
             </button>
+          )}
+          {account.plan !== 'paid' && (
+            <p className={`w-full text-sm ${atItemLimit ? 'text-amber-700 dark:text-amber-300' : 'text-muted dark:text-brand-200'}`}>
+              {items.length} of {FREE_ITEM_LIMIT} {itemLabel}s used on the Free plan.
+              {atItemLimit ? ' Upgrade to Paid for unlimited items.' : ''}
+            </p>
           )}
         </div>
 
