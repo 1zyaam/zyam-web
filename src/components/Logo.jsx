@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import logoMark from '../assets/logo-mark.png'
 
 /**
  * Zyam Web logo.
@@ -45,7 +46,7 @@ export default function Logo({ onTripleTap }) {
       className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none"
     >
       <img
-        src="/logo-mark.png"
+        src={logoMark}
         alt="Zyam Web logo"
         className="logo-mark h-9 w-9 shrink-0 rounded-[8px] object-cover ring-1 ring-black/10 dark:ring-white/10"
       />

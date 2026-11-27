@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { PLANS, THEMES, daysSince, timeAgo, FREEZE_DAYS } from '../lib/store.js'
+import logoMark from '../assets/logo-mark.png'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -405,7 +406,7 @@ function AdminTopBar({ activeTab, onSelect, onOpenPalette, onRefresh, bellCount,
           title="Back to home"
           className="logo-mark-copper h-10 w-10 shrink-0 overflow-hidden rounded-[10px] ring-1 ring-white/20 focus-visible:outline-none"
         >
-          <img src="/logo-mark.png" alt="Zyam Web logo" className="h-full w-full object-cover" />
+          <img src={logoMark} alt="Zyam Web logo" className="h-full w-full object-cover" />
         </button>
         <span className="hidden leading-tight sm:block">
           <span className="block text-sm font-bold tracking-wide">ZYAM WEB</span>
@@ -1013,7 +1014,7 @@ export default function Admin() {
     return (
       <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg font-vessa px-4 py-16 dark:bg-vessa-darkBg">
         <div className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] w-full max-w-md">
-          <img src="/logo-mark.png" alt="Zyam Web" className="logo-mark-copper h-12 w-12 rounded-[10px] ring-1 ring-black/10 dark:ring-white/10" />
+          <img src={logoMark} alt="Zyam Web" className="logo-mark-copper h-12 w-12 rounded-[10px] ring-1 ring-black/10 dark:ring-white/10" />
           <h1 className="mt-4 text-2xl font-semibold">Admin sign in</h1>
           <p className="mt-2 text-sm text-[#56615a] dark:text-[#a8b4ad]">
             This area is for the Zyam Web owner only. Sign in with the admin account.
