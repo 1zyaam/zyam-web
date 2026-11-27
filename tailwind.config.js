@@ -20,18 +20,20 @@ export default {
         },
         // Vessa-style dashboard palette (copper accent, warm greige / near-black)
         vessa: {
-          bg: '#E7E5DF',
-          card: '#FCFDFC',
-          copper: '#A8481C',
-          copperDark: '#8F3A17',
-          peach: '#FFA77A',
-          peachLight: '#FFB98F',
-          teal: '#5399AE',
-          tealLight: '#80CADE',
-          amber: '#DAB167',
-          amberLight: '#F6D590',
-          darkBg: '#141513',
-          darkCard: '#171D1A'
+          bg: '#eef0ec',
+          card: '#fcfdfc',
+          copper: '#a8481c',
+          copperDark: '#8f3a17',
+          peach: '#ffa77a',
+          peachLight: '#ffb98f',
+          teal: '#1d8a7b',
+          tealLight: '#4fcab8',
+          amber: '#c88a12',
+          amberLight: '#f2c056',
+          sky: '#3a72c8',
+          skyLight: '#7eacf2',
+          darkBg: '#0f1412',
+          darkCard: '#171d1a'
         },
         ink: '#1E1B2E',
         muted: '#6B6580',
@@ -43,6 +45,7 @@ export default {
         }
       },
       fontFamily: {
+        vessa: ['Urbanist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         sans: ['"Instrument Sans"', 'system-ui', 'sans-serif'],
         display: ['Fraunces', 'Georgia', 'serif'],
         josefin: ['"Josefin Sans"', 'sans-serif']

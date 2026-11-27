@@ -117,45 +117,76 @@ function Gauge({ percent, center, label }) {
         <path d="M 22 96 A 78 78 0 0 1 178 96" fill="none" strokeWidth="10" strokeLinecap="round" className="stroke-vessa-copper transition-all duration-1000 ease-out dark:stroke-vessa-peach" strokeDasharray={arc} strokeDashoffset={offset} />
       </svg>
       <div className="absolute inset-x-0 bottom-0 text-center">
-        <p className="font-display text-3xl font-semibold leading-none">{center}</p>
-        <p className="mt-1 text-xs text-[#6B6659] dark:text-white/55">{label}</p>
+        <p className="text-3xl font-bold leading-none">{center}</p>
+        <p className="mt-1 text-xs text-[#56615a] dark:text-[#a8b4ad]">{label}</p>
       </div>
     </div>
   )
 }
 
 function SignupChart({ data }) {
+  const [hidden, setHidden] = useState({})
   const [hover, setHover] = useState(null)
-  const max = Math.max(...data.map((d) => d.count), 1)
+  const series = [
+    { key: 'newCount', label: 'New accounts', dot: 'bg-vessa-teal dark:bg-vessa-tealLight', bar: 'bg-vessa-teal dark:bg-vessa-tealLight' },
+    { key: 'approvedCount', label: 'Approved', dot: 'bg-vessa-copper dark:bg-vessa-peach', bar: 'bg-vessa-copper dark:bg-vessa-peach' },
+    { key: 'totalCount', label: 'Total accounts', dot: 'bg-vessa-sky dark:bg-vessa-skyLight', bar: 'bg-vessa-sky dark:bg-vessa-skyLight' }
+  ]
+  const visible = series.filter((s) => !hidden[s.key])
+  const max = Math.max(...data.flatMap((d) => visible.map((s) => d[s.key])), 1)
+  const toggle = (key) => setHidden((h) => ({ ...h, [key]: !h[key] }))
   return (
     <div>
-      <div className="flex h-44 items-end gap-2">
+      <div className="flex flex-wrap gap-1.5">
+        {series.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => toggle(s.key)}
+            aria-pressed={!hidden[s.key]}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-opacity ${hidden[s.key] ? 'text-[#56615a]/60 opacity-60 ring-black/10 dark:text-[#a8b4ad]/60 dark:ring-white/10' : 'text-[#18201b] ring-black/10 hover:bg-black/[0.03] dark:text-white dark:ring-white/15 dark:hover:bg-white/5'}`}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />
+            {s.label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 flex h-44 items-end gap-2">
         {data.map((d, i) => (
           <div
             key={d.label}
-            className="group relative flex h-full flex-1 flex-col justify-end"
+            className="group relative flex h-full flex-1 items-end gap-[3px]"
             onMouseEnter={() => setHover(i)}
             onMouseLeave={() => setHover(null)}
           >
             {hover === i && (
-              <div className="absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-[#1C1B17] px-2.5 py-1.5 text-xs font-semibold text-white shadow-lg dark:bg-white dark:text-[#1C1B17]">
-                {d.label} · {d.count} new
+              <div className="absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-xl bg-[#18201b] px-3 py-2 text-xs text-white shadow-xl dark:bg-white dark:text-[#18201b]">
+                <p className="font-bold">{d.label}</p>
+                {series.map((s) => (
+                  <p key={s.key} className="flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                    {s.label}: <strong>{d[s.key]}</strong>
+                  </p>
+                ))}
               </div>
             )}
-            <div
-              className={`w-full origin-bottom rounded-t-lg ${hover === i ? 'bg-vessa-copperDark dark:bg-vessa-peachLight' : 'bg-vessa-copper/85 dark:bg-vessa-peach/85'}`}
-              style={{
-                height: `${Math.max(4, (d.count / max) * 100)}%`,
-                animation: 'vessa-bar 0.7s cubic-bezier(0.22,1,0.36,1) backwards',
-                animationDelay: `${i * 60}ms`
-              }}
-            />
+            {visible.map((s) => (
+              <div
+                key={s.key}
+                className={`flex-1 origin-bottom rounded-t-[4px] ${s.bar}`}
+                style={{
+                  height: `${Math.max(3, (d[s.key] / max) * 100)}%`,
+                  animation: 'vessa-bar 0.7s cubic-bezier(0.22,1,0.36,1) backwards',
+                  animationDelay: `${i * 50}ms`
+                }}
+              />
+            ))}
+            {visible.length === 0 && <div className="h-[3px] w-full rounded bg-black/10 dark:bg-white/10" />}
           </div>
         ))}
       </div>
       <div className="mt-2 flex gap-2">
         {data.map((d) => (
-          <span key={d.label} className="flex-1 text-center text-[11px] text-[#6B6659] dark:text-white/45">{d.label}</span>
+          <span key={d.label} className="flex-1 text-center text-[11px] text-[#56615a] dark:text-[#88948d]">{d.label}</span>
         ))}
       </div>
     </div>
@@ -238,24 +269,14 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
   }, [activeTab, collapsed])
   const badges = { accounts: pending, support: openMessages }
   return (
-    <aside className={`sticky top-4 hidden h-[calc(100vh-2rem)] shrink-0 flex-col self-start rounded-3xl bg-vessa-card p-3 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 md:flex ${collapsed ? 'w-[76px]' : 'w-[216px]'}`}>
-      <div className="flex items-center gap-2.5 px-2 pb-2 pt-1">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper font-display text-lg font-bold text-white dark:bg-vessa-peach dark:text-[#221A12]">Z</span>
-        {!collapsed && (
-          <span className="leading-tight">
-            <span className="block text-sm font-bold tracking-wide">ZYAM WEB</span>
-            <span className="block text-[11px] text-[#6B6659] dark:text-white/50">Owner console</span>
-          </span>
-        )}
-      </div>
-
+    <aside className={`sticky top-[112px] hidden h-[calc(100vh-128px)] shrink-0 flex-col self-start rounded-[22px] bg-vessa-card p-3 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] md:flex ${collapsed ? 'w-[76px]' : 'w-[216px]'}`}>
       {collapsed ? (
         <button
           type="button"
           onClick={onToggleTheme}
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="mx-auto mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/[0.05] text-[#1C1B17]/70 hover:bg-black/[0.08] dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/15"
+          className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-black/[0.05] text-[#18201b]/70 hover:bg-black/[0.08] dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/15"
         >
           {theme === 'dark' ? <ISun className="h-4 w-4" /> : <IMoon className="h-4 w-4" />}
         </button>
@@ -264,15 +285,15 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
           type="button"
           onClick={onToggleTheme}
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="relative mt-2 flex h-9 items-center justify-between rounded-full bg-black/[0.05] px-1 dark:bg-white/10"
+          className="relative flex h-9 items-center justify-between rounded-full bg-black/[0.05] px-1 dark:bg-white/10"
         >
-          <span className="relative z-10 flex h-7 w-7 items-center justify-center text-[#1C1B17]/70 dark:text-white/60"><ISun className="h-4 w-4" /></span>
-          <span className="relative z-10 flex h-7 w-7 items-center justify-center text-[#1C1B17]/70 dark:text-white/60"><IMoon className="h-4 w-4" /></span>
+          <span className="relative z-10 flex h-7 w-7 items-center justify-center text-[#18201b]/70 dark:text-[#a8b4ad]"><ISun className="h-4 w-4" /></span>
+          <span className="relative z-10 flex h-7 w-7 items-center justify-center text-[#18201b]/70 dark:text-[#a8b4ad]"><IMoon className="h-4 w-4" /></span>
           <span aria-hidden="true" className={`absolute top-1 h-7 w-7 rounded-full bg-vessa-card shadow transition-all duration-300 dark:bg-vessa-darkCard ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
         </button>
       )}
 
-      <nav ref={navRef} className="relative mt-3 flex flex-col gap-1" aria-label="Admin sections">
+      <nav ref={navRef} className="relative mt-2 flex flex-col gap-1" aria-label="Admin sections">
         <span
           aria-hidden="true"
           className="absolute left-0 w-full rounded-full bg-vessa-copper transition-all duration-300 dark:bg-vessa-peach"
@@ -289,12 +310,12 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
               onClick={() => onSelect(tab.id)}
               aria-current={active ? 'page' : undefined}
               title={collapsed ? tab.label : undefined}
-              className={`relative z-10 flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-semibold transition-colors ${active ? 'text-white dark:text-[#221A12]' : 'text-[#1C1B17]/75 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/5'} ${collapsed ? 'justify-center px-0' : ''}`}
+              className={`relative z-10 flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-semibold transition-colors ${active ? 'text-white dark:text-[#2b0f03]' : 'text-[#18201b]/75 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/5'} ${collapsed ? 'justify-center px-0' : ''}`}
             >
               <Icon className="h-5 w-5 shrink-0" />
               {!collapsed && <span className="flex-1 text-left">{tab.label}</span>}
               {!collapsed && badge > 0 && (
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${active ? 'bg-white/25 text-white dark:bg-black/15 dark:text-[#221A12]' : 'bg-vessa-copper/10 text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach'}`}>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${active ? 'bg-white/25 text-white dark:bg-black/15 dark:text-[#2b0f03]' : 'bg-vessa-copper/10 text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach'}`}>
                   {badge}
                 </span>
               )}
@@ -303,11 +324,11 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
         })}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-1 pt-3">
+      <div className="mt-auto flex flex-col gap-1 rounded-[22px] bg-[#f3f5f2] p-1.5 dark:bg-[#1c231f]">
         <Link
           to="/"
           title={collapsed ? 'View public site' : undefined}
-          className={`flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium text-[#1C1B17]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
+          className={`flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium text-[#18201b]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
         >
           <IExternal className="h-5 w-5 shrink-0" />
           {!collapsed && <span>View site</span>}
@@ -316,7 +337,7 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
           type="button"
           onClick={onLogout}
           title={collapsed ? 'Log out' : undefined}
-          className={`flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium text-[#1C1B17]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
+          className={`flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium text-[#18201b]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
         >
           <ILogout className="h-5 w-5 shrink-0" />
           {!collapsed && <span>Log out</span>}
@@ -326,7 +347,7 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
           onClick={onToggleCollapse}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand' : 'Collapse'}
-          className={`flex items-center gap-3 rounded-full px-3.5 py-2 text-xs font-medium text-[#6B6659] hover:bg-black/[0.04] dark:text-white/50 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
+          className={`flex items-center gap-3 rounded-full px-3.5 py-2 text-xs font-medium text-[#56615a] hover:bg-black/[0.04] dark:text-[#88948d] dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
         >
           <ICollapse className={`h-4 w-4 shrink-0 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} />
           {!collapsed && <span>Collapse</span>}
@@ -337,81 +358,102 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
 }
 
 /* ---------- Vessa top bar (floating rounded pill) ---------- */
-const ICON_BTN = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#1C1B17]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5'
+const ICON_BTN = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#18201b]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5'
 const MENU_ITEM = 'block w-full rounded-xl px-3 py-2 text-left text-sm font-medium hover:bg-black/[0.04] dark:hover:bg-white/5'
 
-function AdminTopBar({ title, subtitle, onOpenPalette, onRefresh, bellCount, bellOpen, onToggleBell, alerts, onAlertClick, onNew, adminEmail, accountOpen, onToggleAccount, onLogout }) {
+function AdminTopBar({ activeTab, onSelect, onOpenPalette, onRefresh, bellCount, bellOpen, onToggleBell, alerts, onAlertClick, onNew, adminEmail, accountOpen, onToggleAccount, onLogout }) {
   return (
-    <header className="sticky top-4 z-40 flex items-center gap-1.5 rounded-full bg-vessa-card/90 px-3 py-2 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 backdrop-blur-md dark:bg-vessa-darkCard/90 dark:ring-white/5">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper font-display text-base font-bold text-white dark:bg-vessa-peach dark:text-[#221A12] md:hidden">Z</span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-display text-lg font-semibold leading-tight">{title}</p>
-        <p className="hidden truncate text-[11px] text-[#6B6659] dark:text-white/50 sm:block">{subtitle}</p>
+    <header className="sticky top-4 z-40 flex h-20 items-center gap-2 rounded-full bg-vessa-card/90 px-4 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 backdrop-blur-md dark:bg-vessa-darkCard/90 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-vessa-copper text-lg font-bold text-white dark:bg-vessa-peach dark:text-[#2b0f03]">Z</span>
+        <span className="hidden leading-tight sm:block">
+          <span className="block text-sm font-bold tracking-wide">ZYAM WEB</span>
+          <span className="block text-[11px] text-[#56615a] dark:text-[#a8b4ad]">Owner console</span>
+        </span>
       </div>
-      <button
-        type="button"
-        onClick={onOpenPalette}
-        className="hidden items-center gap-2 rounded-full bg-black/[0.04] px-3 py-2 text-sm text-[#6B6659] hover:bg-black/[0.07] dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10 sm:flex"
-      >
-        <ISearch className="h-4 w-4" />
-        <span className="hidden lg:inline">Search</span>
-        <kbd className="rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] font-bold dark:bg-white/15">⌘K</kbd>
-      </button>
-      <button type="button" onClick={onRefresh} aria-label="Refresh" title="Refresh" className={ICON_BTN}>
-        <IRefresh className="h-5 w-5" />
-      </button>
-      <div className="relative">
-        <button type="button" onClick={onToggleBell} aria-label="Notifications" title="Notifications" className={`${ICON_BTN} relative`}>
-          <IBell className="h-5 w-5" />
-          {bellCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{bellCount}</span>
-          )}
+
+      <nav className="mx-auto hidden items-center gap-1 rounded-full bg-black/[0.04] p-1 dark:bg-white/5 lg:flex" aria-label="Admin sections">
+        {TABS.map((tab) => {
+          const active = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onSelect(tab.id)}
+              aria-current={active ? 'page' : undefined}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${active ? 'bg-[#18201b] text-white dark:bg-white dark:text-[#0f1412]' : 'text-[#18201b]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5'}`}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
+      </nav>
+
+      <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          className="hidden items-center gap-2 rounded-full bg-black/[0.04] px-3 py-2 text-sm text-[#56615a] hover:bg-black/[0.07] dark:bg-white/5 dark:text-[#a8b4ad] dark:hover:bg-white/10 sm:flex"
+        >
+          <ISearch className="h-4 w-4" />
+          <span className="hidden lg:inline">Search</span>
+          <kbd className="rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] font-bold dark:bg-white/15">⌘K</kbd>
         </button>
-        {bellOpen && (
-          <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-vessa-card p-2 shadow-xl ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/10">
-            <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-[#6B6659] dark:text-white/40">Alerts</p>
-            {alerts.length === 0 ? (
-              <p className="px-2 py-3 text-sm text-[#6B6659] dark:text-white/55">All clear — nothing needs you.</p>
-            ) : (
-              alerts.map((a) => (
-                <button key={a.key} onClick={() => onAlertClick(a)} className="flex w-full items-start gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/5">
-                  <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${a.tone}`} />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold">{a.title}</span>
-                    <span className="block text-xs text-[#6B6659] dark:text-white/50">{a.sub}</span>
-                  </span>
-                </button>
-              ))
+        <button type="button" onClick={onRefresh} aria-label="Refresh" title="Refresh" className={ICON_BTN}>
+          <IRefresh className="h-5 w-5" />
+        </button>
+        <div className="relative">
+          <button type="button" onClick={onToggleBell} aria-label="Notifications" title="Notifications" className={`${ICON_BTN} relative`}>
+            <IBell className="h-5 w-5" />
+            {bellCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{bellCount}</span>
             )}
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={onNew}
-        className="hidden items-center gap-1.5 rounded-full bg-vessa-copper px-4 py-2 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight sm:flex"
-      >
-        <IPlus className="h-4 w-4" /> New
-      </button>
-      <div className="relative">
-        <button type="button" onClick={onToggleAccount} className="flex items-center gap-2 rounded-full py-1 pl-1 pr-1.5 hover:bg-black/[0.04] dark:hover:bg-white/5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-vessa-peach text-xs font-bold text-[#221A12]">WA</span>
-          <span className="hidden text-left leading-tight lg:block">
-            <span className="block text-[11px] text-[#6B6659] dark:text-white/50">Good day</span>
-            <span className="block text-sm font-semibold">Wajid Ali</span>
-          </span>
-          <IChevron className="hidden h-4 w-4 text-[#6B6659] dark:text-white/50 lg:block" />
+          </button>
+          {bellOpen && (
+            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-[22px] bg-vessa-card p-2 shadow-xl ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/10">
+              <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-[#56615a] dark:text-[#88948d]">Alerts</p>
+              {alerts.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-[#56615a] dark:text-[#a8b4ad]">All clear — nothing needs you.</p>
+              ) : (
+                alerts.map((a) => (
+                  <button key={a.key} onClick={() => onAlertClick(a)} className="flex w-full items-start gap-2.5 rounded-2xl px-2 py-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/5">
+                    <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${a.tone}`} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{a.title}</span>
+                      <span className="block text-xs text-[#56615a] dark:text-[#a8b4ad]">{a.sub}</span>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onNew}
+          className="hidden items-center gap-1.5 rounded-full bg-vessa-copper px-4 py-2 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#2b0f03] dark:hover:bg-vessa-peachLight sm:flex"
+        >
+          <IPlus className="h-4 w-4" /> New
         </button>
-        {accountOpen && (
-          <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-vessa-card p-2 shadow-xl ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/10">
-            <p className="px-3 py-2 text-xs text-[#6B6659] dark:text-white/50">
-              Signed in as<br />
-              <span className="font-semibold text-[#1C1B17] dark:text-white">{adminEmail}</span>
-            </p>
-            <Link to="/" className={MENU_ITEM}>View public site</Link>
-            <button type="button" onClick={onLogout} className={MENU_ITEM}>Log out</button>
-          </div>
-        )}
+        <div className="relative">
+          <button type="button" onClick={onToggleAccount} className="flex items-center gap-2 rounded-full py-1 pl-1 pr-1.5 hover:bg-black/[0.04] dark:hover:bg-white/5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-vessa-peach text-xs font-bold text-[#2b0f03]">WA</span>
+            <span className="hidden text-left leading-tight lg:block">
+              <span className="block text-[11px] text-[#56615a] dark:text-[#a8b4ad]">Good day</span>
+              <span className="block text-sm font-semibold">Wajid Ali</span>
+            </span>
+            <IChevron className="hidden h-4 w-4 text-[#56615a] dark:text-[#88948d] lg:block" />
+          </button>
+          {accountOpen && (
+            <div className="absolute right-0 mt-2 w-52 rounded-[22px] bg-vessa-card p-2 shadow-xl ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/10">
+              <p className="px-3 py-2 text-xs text-[#56615a] dark:text-[#a8b4ad]">
+                Signed in as<br />
+                <span className="font-semibold text-[#18201b] dark:text-white">{adminEmail}</span>
+              </p>
+              <Link to="/" className={MENU_ITEM}>View public site</Link>
+              <button type="button" onClick={onLogout} className={MENU_ITEM}>Log out</button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )
@@ -438,18 +480,18 @@ function PaletteModal({ open, query, onQuery, onClose, onSelectTab, accounts, on
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-24 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-vessa-card shadow-2xl ring-1 ring-black/10 dark:bg-vessa-darkCard dark:ring-white/10" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-black/5 px-4 py-3 dark:border-white/10">
-          <ISearch className="h-5 w-5 shrink-0 text-[#6B6659] dark:text-white/50" />
+          <ISearch className="h-5 w-5 shrink-0 text-[#56615a] dark:text-[#88948d]" />
           <input
             autoFocus
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             placeholder="Search accounts, pages…"
-            className="w-full bg-transparent text-sm outline-none placeholder:text-[#6B6659] dark:placeholder:text-white/40"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-[#56615a] dark:placeholder:text-white/40"
           />
           <kbd className="shrink-0 rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] font-bold dark:bg-white/15">esc</kbd>
         </div>
         <div className="max-h-80 overflow-y-auto p-2">
-          <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-[#6B6659] dark:text-white/40">Pages</p>
+          <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-[#56615a] dark:text-[#88948d]">Pages</p>
           {TABS.map((t) => (
             <button key={t.id} onClick={() => onSelectTab(t.id)} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium hover:bg-black/[0.04] dark:hover:bg-white/5">
               {t.label}
@@ -457,7 +499,7 @@ function PaletteModal({ open, query, onQuery, onClose, onSelectTab, accounts, on
           ))}
           {matched.length > 0 && (
             <>
-              <p className="px-2 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-[#6B6659] dark:text-white/40">Accounts</p>
+              <p className="px-2 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-[#56615a] dark:text-[#88948d]">Accounts</p>
               {matched.map((a) => (
                 <button key={a.id} onClick={() => onSelectAccount(a)} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm hover:bg-black/[0.04] dark:hover:bg-white/5">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-vessa-copper/10 text-xs font-bold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
@@ -465,7 +507,7 @@ function PaletteModal({ open, query, onQuery, onClose, onSelectTab, accounts, on
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{a.business_name || '(No name)'}</span>
-                    <span className="block truncate text-xs text-[#6B6659] dark:text-white/50">{a.email} · /s/{a.slug}</span>
+                    <span className="block truncate text-xs text-[#56615a] dark:text-[#88948d]">{a.email} · /s/{a.slug}</span>
                   </span>
                 </button>
               ))}
@@ -828,15 +870,15 @@ export default function Admin() {
   // ---- Render: Supabase not configured ----
   if (!isSupabaseConfigured) {
     return (
-      <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg px-4 py-16 dark:bg-vessa-darkBg">
-        <div className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5 text-center w-full max-w-2xl">
-          <h1 className="font-display text-2xl font-semibold">Connect Supabase to enable this</h1>
-          <p className="mt-3 text-[#6B6659] dark:text-white/55">
+      <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg font-vessa px-4 py-16 dark:bg-vessa-darkBg">
+        <div className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] text-center w-full max-w-2xl">
+          <h1 className="text-2xl font-semibold">Connect Supabase to enable this</h1>
+          <p className="mt-3 text-[#56615a] dark:text-[#a8b4ad]">
             The admin panel needs a Supabase project. Copy <code>.env.example</code> to <code>.env</code>,
             set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then run the SQL
             migrations in <code>supabase/migrations/</code>. See <code>DEPLOY.md</code> for the steps.
           </p>
-          <Link to="/" className="mt-6 inline-block rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight">
+          <Link to="/" className="mt-6 inline-block rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#2b0f03] dark:hover:bg-vessa-peachLight">
             Back to home
           </Link>
         </div>
@@ -847,14 +889,14 @@ export default function Admin() {
   // ---- Render: password gate (always first) ----
   if (gate !== 'admin') {
     return (
-      <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg px-4 py-16 dark:bg-vessa-darkBg">
-        <div className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5 w-full max-w-md">
-          <h1 className="font-display text-2xl font-semibold">Admin sign in</h1>
-          <p className="mt-2 text-sm text-[#6B6659] dark:text-white/55">
+      <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg font-vessa px-4 py-16 dark:bg-vessa-darkBg">
+        <div className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] w-full max-w-md">
+          <h1 className="text-2xl font-semibold">Admin sign in</h1>
+          <p className="mt-2 text-sm text-[#56615a] dark:text-[#a8b4ad]">
             This area is for the Zyam Web owner only. Sign in with the admin account.
           </p>
           {gate === 'checking' ? (
-            <p className="mt-6 text-sm text-[#6B6659] dark:text-white/55">Checking your session…</p>
+            <p className="mt-6 text-sm text-[#56615a] dark:text-[#a8b4ad]">Checking your session…</p>
           ) : (
             <form onSubmit={handleSignIn} className="mt-6 space-y-4">
               <div>
@@ -888,7 +930,7 @@ export default function Admin() {
               <button
                 type="submit"
                 disabled={signingIn}
-                className="w-full rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight"
+                className="w-full rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#2b0f03] dark:hover:bg-vessa-peachLight"
               >
                 {signingIn ? 'Signing in…' : 'Sign in as admin'}
               </button>
@@ -902,31 +944,30 @@ export default function Admin() {
 
   // ---- Derived data for the Vessa overview ----
   const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
-  const signupsByDay = (() => {
+  const chartData = (() => {
     const days = []
     const now = new Date()
     for (let i = 9; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
       const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
       const key = d.toDateString()
-      const count = accounts.filter((a) => a.created_at && new Date(a.created_at).toDateString() === key).length
-      days.push({ label, count })
+      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59)
+      const dayAccounts = accounts.filter((x) => x.created_at && new Date(x.created_at).toDateString() === key)
+      const total = accounts.filter((x) => x.created_at && new Date(x.created_at) <= dayEnd).length
+      days.push({
+        label,
+        newCount: dayAccounts.length,
+        approvedCount: dayAccounts.filter((x) => x.status === 'active').length,
+        totalCount: total
+      })
     }
     return days
   })()
-  const monthSignups = accounts.filter((a) => {
-    const d = a.created_at ? new Date(a.created_at) : null
+  const monthSignups = accounts.filter((x) => {
+    const d = x.created_at ? new Date(x.created_at) : null
     const n = new Date()
     return d && d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth()
   }).length
-  const cumulative = []
-  {
-    let run = (overview?.total || 0) - signupsByDay.reduce((s, d) => s + d.count, 0)
-    signupsByDay.forEach((d) => {
-      run += d.count
-      cumulative.push(run)
-    })
-  }
   const topStores = [...accounts]
     .sort((a, b) => (productCounts[b.id] || 0) - (productCounts[a.id] || 0))
     .slice(0, 3)
@@ -975,36 +1016,18 @@ export default function Admin() {
     })
   const pendingShare = overview && overview.total > 0 ? Math.round((overview.pending / overview.total) * 100) : 0
   const bellCount = (overview?.pending || 0) + openMessages
-  const TAB_SUBTITLES = {
-    overview: 'Your platform at a glance',
-    accounts: 'All stores, freelancers & influencers',
-    ads: 'Campaigns & budgets',
-    support: 'Messages from clients'
-  }
 
   // ---- Render: admin panel (Vessa shell) ----
   return (
-    <div className="min-h-screen bg-vessa-bg text-[#1C1B17] dark:bg-vessa-darkBg dark:text-white">
-      <div className="mx-auto flex max-w-[1400px] gap-4 p-3 sm:p-4">
-        <AdminSidebar
-          activeTab={activeTab}
-          onSelect={(id) => {
-            setActiveTab(id)
-            setBellOpen(false)
-            setAccountOpen(false)
-          }}
-          pending={overview?.pending || 0}
-          openMessages={openMessages}
-          collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed((v) => !v)}
-          theme={adminTheme}
-          onToggleTheme={toggleAdminTheme}
-          onLogout={handleLogout}
-        />
-        <div className="min-w-0 flex-1">
+    <div className="min-h-screen bg-vessa-bg font-vessa text-[#18201b] dark:bg-vessa-darkBg dark:text-[#ecf2ee]">
+      <div className="mx-auto max-w-[1400px] p-3 sm:p-4">
           <AdminTopBar
-            title={TABS.find((t) => t.id === activeTab)?.label || 'Overview'}
-            subtitle={TAB_SUBTITLES[activeTab] || ''}
+            activeTab={activeTab}
+            onSelect={(id) => {
+              setActiveTab(id)
+              setBellOpen(false)
+              setAccountOpen(false)
+            }}
             onOpenPalette={() => setPaletteOpen(true)}
             onRefresh={loadAll}
             bellCount={bellCount}
@@ -1027,27 +1050,43 @@ export default function Admin() {
             }}
             onLogout={handleLogout}
           />
-
-          <main className="mt-4 pb-24 md:pb-8">
+        <div className="mt-4 flex gap-4">
+        <AdminSidebar
+          activeTab={activeTab}
+          onSelect={(id) => {
+            setActiveTab(id)
+            setBellOpen(false)
+            setAccountOpen(false)
+          }}
+          pending={overview?.pending || 0}
+          openMessages={openMessages}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((v) => !v)}
+          theme={adminTheme}
+          onToggleTheme={toggleAdminTheme}
+          onLogout={handleLogout}
+        />
+          <div className="min-w-0 flex-1">
+          <main className="pb-24 md:pb-8">
             {error && (
               <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</p>
             )}
             {notice && (
               <p role="status" className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{notice}</p>
             )}
-            {loading && <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">Loading…</p>}
+            {loading && <p className="mt-4 text-sm text-[#56615a] dark:text-[#a8b4ad]">Loading…</p>}
 
             {/* ---------- OVERVIEW (Vessa grid) ---------- */}
             {activeTab === 'overview' && overview && (
               <section className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="vessa-rise rounded-3xl bg-vessa-card p-6 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '0ms' }}>
-                    <p className="flex items-center gap-2 text-xs font-medium text-[#6B6659] dark:text-white/55">
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-6 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '0ms' }}>
+                    <p className="flex items-center gap-2 text-xs font-medium text-[#56615a] dark:text-[#a8b4ad]">
                       <span className="h-2 w-2 rounded-full bg-emerald-500" />
                       {todayLabel}
                     </p>
-                    <h1 className="mt-3 font-display text-[28px] font-semibold leading-tight">Welcome back, Wajid!</h1>
-                    <p className="mt-2 text-sm leading-relaxed text-[#6B6659] dark:text-white/55">
+                    <h1 className="mt-3 text-[34px] font-bold leading-[1.1] tracking-[-0.02em]">Welcome back, Wajid!</h1>
+                    <p className="mt-2 text-sm leading-relaxed text-[#56615a] dark:text-[#a8b4ad]">
                       Here is what is happening on your platform today — {overview.pending} account{overview.pending === 1 ? '' : 's'} waiting for approval
                       {openMessages > 0 ? ` and ${openMessages} support message${openMessages === 1 ? '' : 's'} open` : ''}.
                     </p>
@@ -1057,7 +1096,7 @@ export default function Admin() {
                           setActiveTab('accounts')
                           setStatusFilter('pending')
                         }}
-                        className="rounded-full bg-vessa-copper px-4 py-2 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight"
+                        className="rounded-full bg-vessa-copper px-4 py-2 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#2b0f03] dark:hover:bg-vessa-peachLight"
                       >
                         Review pending
                       </button>
@@ -1070,72 +1109,74 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  <div className="vessa-rise relative overflow-hidden rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '60ms' }}>
+                  <div className="vessa-rise relative overflow-hidden rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '60ms' }}>
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <div className="relative flex items-start justify-between">
-                      <p className="text-sm font-medium text-[#6B6659] dark:text-white/55">Total accounts</p>
+                      <p className="text-sm font-medium text-[#56615a] dark:text-[#a8b4ad]">Total accounts</p>
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-vessa-copper/10 text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach"><IUsers className="h-4 w-4" /></span>
                     </div>
-                    <p className="relative mt-2 font-display text-4xl font-semibold tabular-nums"><CountUp value={overview.total} /></p>
-                    <p className="relative mt-1 text-xs text-[#6B6659] dark:text-white/50">{overview.free} free · {overview.paid} paid</p>
-                    <Sparkline data={cumulative} stroke="#A8481C" className="relative mt-3 h-8 w-24" />
+                    <p className="relative mt-2 text-[28px] font-bold tabular-nums"><CountUp value={overview.total} /></p>
+                    <p className="relative mt-1 text-xs font-semibold text-[#23804d] dark:text-[#6fd38e]">↗ +{monthSignups} this month</p>
+                    <p className="relative mt-1 text-xs text-[#56615a] dark:text-[#88948d]">{overview.free} free · {overview.paid} paid</p>
+                    <Sparkline data={chartData.map((d) => d.totalCount)} stroke="#a8481c" className="relative mt-3 h-8 w-24" />
                   </div>
 
-                  <div className="vessa-rise relative overflow-hidden rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '120ms' }}>
+                  <div className="vessa-rise relative overflow-hidden rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '120ms' }}>
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <div className="relative flex items-start justify-between">
-                      <p className="text-sm font-medium text-[#6B6659] dark:text-white/55">Pending approval</p>
+                      <p className="text-sm font-medium text-[#56615a] dark:text-[#a8b4ad]">Pending approval</p>
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-300"><IAlert className="h-4 w-4" /></span>
                     </div>
-                    <p className="relative mt-2 font-display text-4xl font-semibold tabular-nums"><CountUp value={overview.pending} /></p>
-                    <p className="relative mt-1 text-xs text-[#6B6659] dark:text-white/50">Needs your review</p>
-                    <Sparkline data={signupsByDay.map((d) => d.count)} stroke="#DAB167" className="relative mt-3 h-8 w-24" />
+                    <p className="relative mt-2 text-[28px] font-bold tabular-nums"><CountUp value={overview.pending} /></p>
+                    <p className="relative mt-1 text-xs font-semibold text-[#93600a] dark:text-[#f2c056]">⚠ {overview.pending} waiting</p>
+                    <p className="relative mt-1 text-xs text-[#56615a] dark:text-[#88948d]">of {overview.total} accounts</p>
+                    <Sparkline data={chartData.map((d) => d.newCount - d.approvedCount)} stroke="#c88a12" className="relative mt-3 h-8 w-24" />
                   </div>
 
-                  <div className="vessa-rise relative overflow-hidden rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '180ms' }}>
+                  <div className="vessa-rise relative overflow-hidden rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '180ms' }}>
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <div className="relative flex items-start justify-between">
-                      <p className="text-sm font-medium text-[#6B6659] dark:text-white/55">Products listed</p>
+                      <p className="text-sm font-medium text-[#56615a] dark:text-[#a8b4ad]">Products listed</p>
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600/10 text-teal-700 dark:bg-teal-300/15 dark:text-teal-200"><IPackage className="h-4 w-4" /></span>
                     </div>
-                    <p className="relative mt-2 font-display text-4xl font-semibold tabular-nums"><CountUp value={overview.products} /></p>
-                    <p className="relative mt-1 text-xs text-[#6B6659] dark:text-white/50">Across {accounts.length} store{accounts.length === 1 ? '' : 's'} · {overview.adCount} ad campaign{overview.adCount === 1 ? '' : 's'}</p>
+                    <p className="relative mt-2 text-[28px] font-bold tabular-nums"><CountUp value={overview.products} /></p>
+                    <p className="relative mt-1 text-xs text-[#56615a] dark:text-[#88948d]">Across {accounts.length} store{accounts.length === 1 ? '' : 's'} · {overview.adCount} ad campaign{overview.adCount === 1 ? '' : 's'}</p>
                   </div>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-3">
-                  <div className="vessa-rise rounded-3xl bg-vessa-card p-6 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 lg:col-span-2" style={{ animationDelay: '220ms' }}>
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-6 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] lg:col-span-2" style={{ animationDelay: '220ms' }}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h2 className="font-display text-lg font-semibold">Accounts statistics</h2>
-                        <p className="text-xs text-[#6B6659] dark:text-white/50">New signups · last 10 days</p>
+                        <h2 className="text-lg font-semibold">Accounts statistics</h2>
+                        <p className="text-xs text-[#56615a] dark:text-[#88948d]">New signups · last 10 days</p>
                       </div>
                       <span className="rounded-full bg-black/[0.04] px-3 py-1 text-xs font-semibold dark:bg-white/5">Daily</span>
                     </div>
                     <div className="mt-5">
-                      <SignupChart data={signupsByDay} />
+                      <SignupChart data={chartData} />
                     </div>
-                    <p className="mt-4 border-t border-black/5 pt-3 text-sm text-[#6B6659] dark:border-white/10 dark:text-white/55">
-                      This month so far: <strong className="text-[#1C1B17] dark:text-white">{monthSignups} new account{monthSignups === 1 ? '' : 's'}</strong> · {overview.pending} pending approval
+                    <p className="mt-4 border-t border-black/5 pt-3 text-sm text-[#56615a] dark:border-white/10 dark:text-[#a8b4ad]">
+                      This month so far: <strong className="text-[#18201b] dark:text-white">{monthSignups} new account{monthSignups === 1 ? '' : 's'}</strong> · {overview.pending} pending approval
                     </p>
                   </div>
 
-                  <div className="vessa-rise rounded-3xl bg-vessa-card p-6 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '280ms' }}>
-                    <h2 className="font-display text-lg font-semibold">Approval progress</h2>
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-6 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '280ms' }}>
+                    <h2 className="text-lg font-semibold">Approval progress</h2>
                     <div className="mt-4">
                       <Gauge percent={pendingShare} center={`${pendingShare}%`} label="Pending review" />
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3 text-center">
                       <div>
                         <p className="text-2xl font-bold tabular-nums">{overview.active}</p>
-                        <p className="text-xs text-[#6B6659] dark:text-white/50">Active</p>
+                        <p className="text-xs text-[#56615a] dark:text-[#88948d]">Active</p>
                       </div>
                       <div>
                         <p className="text-2xl font-bold tabular-nums">{overview.pending}</p>
-                        <p className="text-xs text-[#6B6659] dark:text-white/50">Pending</p>
+                        <p className="text-xs text-[#56615a] dark:text-[#88948d]">Pending</p>
                       </div>
                     </div>
                     <p className="mt-4 rounded-full bg-vessa-copper/10 px-3 py-2 text-center text-xs font-semibold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
@@ -1145,10 +1186,10 @@ export default function Admin() {
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-3">
-                  <div className="vessa-rise rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '320ms' }}>
-                    <h2 className="font-display text-lg font-semibold">Recent accounts</h2>
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '320ms' }}>
+                    <h2 className="text-lg font-semibold">Recent accounts</h2>
                     {recentAccounts.length === 0 ? (
-                      <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">No accounts yet.</p>
+                      <p className="mt-4 text-sm text-[#56615a] dark:text-[#a8b4ad]">No accounts yet.</p>
                     ) : (
                       <ul className="mt-4 space-y-3">
                         {recentAccounts.map((a) => (
@@ -1158,7 +1199,7 @@ export default function Admin() {
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold">{a.business_name || '(No name)'}</span>
-                              <span className="block truncate text-xs text-[#6B6659] dark:text-white/50">{a.email} · /s/{a.slug}</span>
+                              <span className="block truncate text-xs text-[#56615a] dark:text-[#88948d]">{a.email} · /s/{a.slug}</span>
                             </span>
                             <StatusPill status={a.status} />
                           </li>
@@ -1170,10 +1211,10 @@ export default function Admin() {
                     </button>
                   </div>
 
-                  <div className="vessa-rise rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '360ms' }}>
-                    <h2 className="font-display text-lg font-semibold">Alerts &amp; notifications</h2>
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '360ms' }}>
+                    <h2 className="text-lg font-semibold">Alerts &amp; notifications</h2>
                     {alertItems.length === 0 ? (
-                      <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">All clear — nothing needs you.</p>
+                      <p className="mt-4 text-sm text-[#56615a] dark:text-[#a8b4ad]">All clear — nothing needs you.</p>
                     ) : (
                       <div className="mt-3 space-y-1">
                         {alertItems.map((a) => (
@@ -1181,33 +1222,33 @@ export default function Admin() {
                             <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${a.tone}`} />
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-semibold">{a.title}</span>
-                              <span className="block text-xs text-[#6B6659] dark:text-white/50">{a.sub}</span>
+                              <span className="block text-xs text-[#56615a] dark:text-[#88948d]">{a.sub}</span>
                             </span>
-                            <span className="text-[#6B6659] dark:text-white/40">›</span>
+                            <span className="text-[#56615a] dark:text-[#88948d]">›</span>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  <div className="vessa-rise rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '400ms' }}>
-                    <h2 className="font-display text-lg font-semibold">Top stores</h2>
-                    <p className="text-xs text-[#6B6659] dark:text-white/50">By products listed</p>
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '400ms' }}>
+                    <h2 className="text-lg font-semibold">Top stores</h2>
+                    <p className="text-xs text-[#56615a] dark:text-[#88948d]">By products listed</p>
                     {topStores.length === 0 || topStores.every((a) => (productCounts[a.id] || 0) === 0) ? (
-                      <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">No products listed yet.</p>
+                      <p className="mt-4 text-sm text-[#56615a] dark:text-[#a8b4ad]">No products listed yet.</p>
                     ) : (
                       <ul className="mt-4 space-y-3">
                         {topStores.map((a, i) => (
                           <li key={a.id} className="flex items-center gap-3">
-                            <span className="w-5 shrink-0 text-sm font-bold text-[#6B6659] dark:text-white/40">0{i + 1}</span>
+                            <span className="w-5 shrink-0 text-sm font-bold text-[#56615a] dark:text-[#88948d]">0{i + 1}</span>
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper/10 text-sm font-bold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
                               {(a.business_name || '?').slice(0, 1).toUpperCase()}
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold">{a.business_name || '(No name)'}</span>
-                              <span className="block truncate text-xs text-[#6B6659] dark:text-white/50">/s/{a.slug} · {a.type}</span>
+                              <span className="block truncate text-xs text-[#56615a] dark:text-[#88948d]">/s/{a.slug} · {a.type}</span>
                             </span>
-                            <span className="shrink-0 text-sm font-bold tabular-nums">{productCounts[a.id] || 0} <span className="text-xs font-medium text-[#6B6659] dark:text-white/50">items</span></span>
+                            <span className="shrink-0 text-sm font-bold tabular-nums">{productCounts[a.id] || 0} <span className="text-xs font-medium text-[#56615a] dark:text-[#88948d]">items</span></span>
                           </li>
                         ))}
                       </ul>
@@ -1255,7 +1296,7 @@ export default function Admin() {
           </div>
 
           {filteredAccounts.length === 0 ? (
-            <p className="mt-8 rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#6B6659] dark:text-white/55 ring-1 ring-black/5 dark:ring-white/10">
+            <p className="mt-8 rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#56615a] dark:text-[#a8b4ad] ring-1 ring-black/5 dark:ring-white/10">
               No accounts match this search. Try a different search or filter.
             </p>
           ) : (
@@ -1263,14 +1304,14 @@ export default function Admin() {
               {filteredAccounts.map((account) => {
                 const inactiveDays = account.last_active_at ? daysSince(account.last_active_at) : null
                 return (
-                  <li key={account.id} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
+                  <li key={account.id} className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold">{account.business_name || '(No business name)'}</p>
-                        <p className="text-sm text-[#6B6659] dark:text-white/55">
+                        <p className="text-sm text-[#56615a] dark:text-[#a8b4ad]">
                           {account.email} · /s/{account.slug} · {account.type} · {THEMES[account.theme]?.name || account.theme || 'Lavender'}
                         </p>
-                        <p className="mt-1 text-xs text-[#6B6659] dark:text-white/55">
+                        <p className="mt-1 text-xs text-[#56615a] dark:text-[#a8b4ad]">
                           Plan: <strong>{PLANS[account.plan]?.name || account.plan}</strong>
                           {account.last_active_at
                             ? ` · Last active ${new Date(account.last_active_at).toLocaleDateString()} (${inactiveDays} days ago${account.plan === 'free' ? `, ${Math.max(0, FREEZE_DAYS - inactiveDays)} days left before freeze` : ', never freezes'})`
@@ -1330,8 +1371,8 @@ export default function Admin() {
                   {/* ---------- ADS ---------- */}
       {activeTab === 'ads' && (
         <section className="mt-6 space-y-6">
-          <form onSubmit={createCampaign} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
-            <h2 className="font-display text-lg font-semibold">Create campaign</h2>
+          <form onSubmit={createCampaign} className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
+            <h2 className="text-lg font-semibold">Create campaign</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
               <input
                 type="text"
@@ -1367,20 +1408,20 @@ export default function Admin() {
             <button
               type="submit"
               disabled={savingAd}
-              className="mt-4 rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight"
+              className="mt-4 rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#2b0f03] dark:hover:bg-vessa-peachLight"
             >
               {savingAd ? 'Creating…' : 'Create campaign'}
             </button>
           </form>
 
           {campaigns.length === 0 ? (
-            <p className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#6B6659] dark:text-white/55 ring-1 ring-black/5 dark:ring-white/10">
+            <p className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#56615a] dark:text-[#a8b4ad] ring-1 ring-black/5 dark:ring-white/10">
               No ad campaigns yet. Create one above.
             </p>
           ) : (
             <ul className="space-y-3">
               {campaigns.map((campaign) => (
-                <li key={campaign.id} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
+                <li key={campaign.id} className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
                   {editingId === campaign.id ? (
                     <div className="grid gap-3 md:grid-cols-4">
                       <input
@@ -1410,7 +1451,7 @@ export default function Admin() {
                         className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50"
                       />
                       <div className="flex gap-2 md:col-span-4">
-                        <button onClick={() => saveEdit(campaign.id)} disabled={savingAd} className="rounded-full bg-vessa-copper px-4 py-2 text-xs font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight">Save</button>
+                        <button onClick={() => saveEdit(campaign.id)} disabled={savingAd} className="rounded-full bg-vessa-copper px-4 py-2 text-xs font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#2b0f03] dark:hover:bg-vessa-peachLight">Save</button>
                         <button onClick={() => setEditingId(null)} className="rounded-full border border-black/10 dark:border-white/10 px-4 py-2 text-xs font-semibold">Cancel</button>
                       </div>
                     </div>
@@ -1419,17 +1460,17 @@ export default function Admin() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold">{campaign.title}</p>
-                          <p className="text-sm text-[#6B6659] dark:text-white/55">
+                          <p className="text-sm text-[#56615a] dark:text-[#a8b4ad]">
                             Placement: {campaign.placement} · Created {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : '—'}
                           </p>
                         </div>
                         <StatusPill status={campaign.status === 'running' ? 'active' : 'pending'} />
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                        <p><span className="text-[#6B6659] dark:text-white/55">Budget</span><br /><strong>Rs {Number(campaign.budget || 0).toLocaleString()}</strong></p>
-                        <p><span className="text-[#6B6659] dark:text-white/55">Spend</span><br /><strong>Rs {Number(campaign.spend || 0).toLocaleString()}</strong></p>
-                        <p><span className="text-[#6B6659] dark:text-white/55">Impressions</span><br /><strong>{Number(campaign.impressions || 0).toLocaleString()}</strong></p>
-                        <p><span className="text-[#6B6659] dark:text-white/55">Clicks</span><br /><strong>{Number(campaign.clicks || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#56615a] dark:text-[#a8b4ad]">Budget</span><br /><strong>Rs {Number(campaign.budget || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#56615a] dark:text-[#a8b4ad]">Spend</span><br /><strong>Rs {Number(campaign.spend || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#56615a] dark:text-[#a8b4ad]">Impressions</span><br /><strong>{Number(campaign.impressions || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#56615a] dark:text-[#a8b4ad]">Clicks</span><br /><strong>{Number(campaign.clicks || 0).toLocaleString()}</strong></p>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button
@@ -1454,17 +1495,17 @@ export default function Admin() {
       {activeTab === 'support' && (
         <section className="mt-6">
           {messages.length === 0 ? (
-            <p className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#6B6659] dark:text-white/55 ring-1 ring-black/5 dark:ring-white/10">
+            <p className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#56615a] dark:text-[#a8b4ad] ring-1 ring-black/5 dark:ring-white/10">
               No support messages yet. Messages from the landing-page contact form and plan-upgrade requests will appear here.
             </p>
           ) : (
             <ul className="space-y-3">
               {messages.map((message) => (
-                <li key={message.id} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
+                <li key={message.id} className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold">{message.name || '(No name)'} <span className="font-normal text-[#6B6659] dark:text-white/55">· {message.email || 'no email'}</span></p>
-                      <p className="text-xs text-[#6B6659] dark:text-white/55">
+                      <p className="font-semibold">{message.name || '(No name)'} <span className="font-normal text-[#56615a] dark:text-[#a8b4ad]">· {message.email || 'no email'}</span></p>
+                      <p className="text-xs text-[#56615a] dark:text-[#a8b4ad]">
                         {message.created_at ? new Date(message.created_at).toLocaleString() : '—'}
                       </p>
                     </div>
@@ -1489,6 +1530,7 @@ export default function Admin() {
           </main>
         </div>
       </div>
+      </div>
 
       {/* Mobile bottom nav (Vessa shell has no global TopBar on /admin) */}
       <nav aria-label="Mobile admin navigation" className="fixed inset-x-3 bottom-3 z-50 flex items-center justify-around rounded-full bg-vessa-card/95 px-2 py-2 shadow-xl ring-1 ring-black/5 backdrop-blur-md dark:bg-vessa-darkCard/95 dark:ring-white/10 md:hidden">
@@ -1501,7 +1543,7 @@ export default function Admin() {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               aria-current={active ? 'page' : undefined}
-              className={`flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium ${active ? 'text-vessa-copper dark:text-vessa-peach' : 'text-[#1C1B17]/70 dark:text-white/70'}`}
+              className={`flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium ${active ? 'text-vessa-copper dark:text-vessa-peach' : 'text-[#18201b]/70 dark:text-white/70'}`}
             >
               <Icon className="h-5 w-5" />
               {tab.label}
@@ -1512,7 +1554,7 @@ export default function Admin() {
           type="button"
           onClick={toggleAdminTheme}
           aria-label={adminTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-[#1C1B17]/70 dark:text-white/70"
+          className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-[#18201b]/70 dark:text-white/70"
         >
           {adminTheme === 'dark' ? <ISun className="h-5 w-5" /> : <IMoon className="h-5 w-5" />}
           Theme
@@ -1520,7 +1562,7 @@ export default function Admin() {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-[#1C1B17]/70 dark:text-white/70"
+          className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-[#18201b]/70 dark:text-white/70"
         >
           <ILogout className="h-5 w-5" />
           Log out
