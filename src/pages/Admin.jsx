@@ -1225,7 +1225,7 @@ export default function Admin() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h2 className="text-lg font-semibold">Accounts statistics</h2>
-                        <p className="text-xs text-[#56615a] dark:text-[#88948d]">New signups · last 10 days</p>
+                        <p className="text-xs text-[#56615a] dark:text-[#88948d]">New signups · last 10 {chartPeriod === 'daily' ? 'days' : chartPeriod === 'weekly' ? 'weeks' : 'months'}</p>
                       </div>
                       <select
                         value={chartPeriod}
