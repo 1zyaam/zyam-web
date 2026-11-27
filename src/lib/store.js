@@ -23,6 +23,19 @@ export function daysSince(dateStr) {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24))
 }
 
+export function timeAgo(dateStr) {
+  if (!dateStr) return '—'
+  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d}d ago`
+  return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
 /** Format a number as Pakistani rupees, e.g. formatPKR(1199) -> "Rs 1,199". */
 export function formatPKR(n) {
   const num = Number(n) || 0

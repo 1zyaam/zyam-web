@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { PLANS, THEMES, daysSince, FREEZE_DAYS } from '../lib/store.js'
+import { PLANS, THEMES, daysSince, timeAgo, FREEZE_DAYS } from '../lib/store.js'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -97,24 +97,34 @@ function Gauge({ percent, center, label }) {
     const t = requestAnimationFrame(() => setMounted(true))
     return () => cancelAnimationFrame(t)
   }, [])
-  const r = 78
-  const arc = Math.PI * r
+  const total = 48
   const p = Math.max(0, Math.min(100, percent))
-  const offset = arc * (1 - (mounted ? p / 100 : 0))
-  const ticks = Array.from({ length: 25 }, (_, i) => {
-    const a = Math.PI - (i / 24) * Math.PI
-    const x1 = 100 + Math.cos(a) * (r + 8)
-    const y1 = 96 - Math.sin(a) * (r + 8)
-    const x2 = 100 + Math.cos(a) * (r + 14)
-    const y2 = 96 - Math.sin(a) * (r + 14)
-    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="1.5" className="text-black/15 dark:text-white/15" />
+  const filled = mounted ? Math.round((p / 100) * total) : 0
+  const ticks = Array.from({ length: total }, (_, i) => {
+    const a = Math.PI - (i / (total - 1)) * Math.PI
+    const x1 = 100 + Math.cos(a) * 62
+    const y1 = 96 - Math.sin(a) * 62
+    const x2 = 100 + Math.cos(a) * 78
+    const y2 = 96 - Math.sin(a) * 78
+    const on = i < filled
+    return (
+      <line
+        key={i}
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        strokeWidth="3"
+        strokeLinecap="round"
+        className={on ? 'stroke-vessa-copper dark:stroke-vessa-peach' : 'stroke-black/10 dark:stroke-white/10'}
+        style={{ transition: 'stroke 0.35s ease', transitionDelay: `${i * 12}ms` }}
+      />
+    )
   })
   return (
     <div className="relative mx-auto w-52">
       <svg viewBox="0 0 200 108" className="w-full">
         {ticks}
-        <path d="M 22 96 A 78 78 0 0 1 178 96" fill="none" strokeWidth="10" strokeLinecap="round" className="stroke-black/10 dark:stroke-white/10" />
-        <path d="M 22 96 A 78 78 0 0 1 178 96" fill="none" strokeWidth="10" strokeLinecap="round" className="stroke-vessa-copper transition-all duration-1000 ease-out dark:stroke-vessa-peach" strokeDasharray={arc} strokeDashoffset={offset} />
       </svg>
       <div className="absolute inset-x-0 bottom-0 text-center">
         <p className="text-3xl font-bold leading-none">{center}</p>
@@ -135,59 +145,75 @@ function SignupChart({ data }) {
   const visible = series.filter((s) => !hidden[s.key])
   const max = Math.max(...data.flatMap((d) => visible.map((s) => d[s.key])), 1)
   const toggle = (key) => setHidden((h) => ({ ...h, [key]: !h[key] }))
+  const stripe = { backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.16) 0 2px, transparent 2px 7px)' }
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {series.map((s) => (
           <button
             key={s.key}
             onClick={() => toggle(s.key)}
             aria-pressed={!hidden[s.key]}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-opacity ${hidden[s.key] ? 'text-[#56615a]/60 opacity-60 ring-black/10 dark:text-[#a8b4ad]/60 dark:ring-white/10' : 'text-[#18201b] ring-black/10 hover:bg-black/[0.03] dark:text-white dark:ring-white/15 dark:hover:bg-white/5'}`}
+            className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold transition-opacity ${hidden[s.key] ? 'text-[#56615a] opacity-45 dark:text-[#a8b4ad]' : 'text-[#18201b] hover:bg-black/[0.03] dark:text-white dark:hover:bg-white/5'}`}
           >
             <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />
             {s.label}
           </button>
         ))}
       </div>
-      <div className="mt-4 flex h-44 items-end gap-2">
-        {data.map((d, i) => (
-          <div
-            key={d.label}
-            className="group relative flex h-full flex-1 items-end gap-[3px]"
-            onMouseEnter={() => setHover(i)}
-            onMouseLeave={() => setHover(null)}
-          >
-            {hover === i && (
-              <div className="absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-xl bg-[#18201b] px-3 py-2 text-xs text-white shadow-xl dark:bg-white dark:text-[#18201b]">
-                <p className="font-bold">{d.label}</p>
-                {series.map((s) => (
-                  <p key={s.key} className="flex items-center gap-1.5">
-                    <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-                    {s.label}: <strong>{d[s.key]}</strong>
-                  </p>
-                ))}
-              </div>
-            )}
-            {visible.map((s) => (
-              <div
-                key={s.key}
-                className={`flex-1 origin-bottom rounded-t-[4px] ${s.bar}`}
-                style={{
-                  height: `${Math.max(3, (d[s.key] / max) * 100)}%`,
-                  animation: 'vessa-bar 0.7s cubic-bezier(0.22,1,0.36,1) backwards',
-                  animationDelay: `${i * 50}ms`
-                }}
-              />
-            ))}
-            {visible.length === 0 && <div className="h-[3px] w-full rounded bg-black/10 dark:bg-white/10" />}
+      <div className="mt-4 flex gap-2">
+        <div className="flex h-44 w-6 shrink-0 flex-col justify-between text-right text-[11px] leading-none text-[#56615a] dark:text-[#88948d]">
+          <span>{max}</span>
+          <span>{Math.round(max / 2)}</span>
+          <span>0</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="relative">
+            <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-black/[0.06] dark:bg-white/10" />
+            <div aria-hidden="true" className="absolute inset-x-0 top-1/2 h-px bg-black/[0.06] dark:bg-white/10" />
+            <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-black/[0.06] dark:bg-white/10" />
+            <div className="relative flex h-44 items-end gap-2">
+              {data.map((d, i) => (
+                <div
+                  key={d.label}
+                  className="group relative flex h-full flex-1 items-end justify-center gap-[3px]"
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover(null)}
+                >
+                  {hover === i && (
+                    <div className="absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-xl bg-[#18201b] px-3 py-2 text-xs text-white shadow-xl dark:bg-white dark:text-[#18201b]">
+                      <p className="font-bold">{d.label}</p>
+                      {series.map((s) => (
+                        <p key={s.key} className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                          {s.label}: <strong>{d[s.key]}</strong>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {visible.map((s) => (
+                    <div
+                      key={s.key}
+                      className={`w-full max-w-[16px] origin-bottom rounded-t-[4px] ${s.bar}`}
+                      style={{
+                        height: `${Math.max(3, (d[s.key] / max) * 100)}%`,
+                        animation: 'vessa-bar 0.7s cubic-bezier(0.22,1,0.36,1) backwards',
+                        animationDelay: `${i * 50}ms`,
+                        ...stripe
+                      }}
+                    />
+                  ))}
+                  {visible.length === 0 && <div className="h-[3px] w-full max-w-[16px] rounded bg-black/10 dark:bg-white/10" />}
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </div>
-      <div className="mt-2 flex gap-2">
-        {data.map((d) => (
-          <span key={d.label} className="flex-1 text-center text-[11px] text-[#56615a] dark:text-[#88948d]">{d.label}</span>
-        ))}
+          <div className="mt-2 flex gap-2">
+            {data.map((d) => (
+              <span key={d.label} className="flex-1 text-center text-[11px] text-[#56615a] dark:text-[#88948d]">{d.label}</span>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -269,7 +295,8 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
   }, [activeTab, collapsed])
   const badges = { accounts: pending, support: openMessages }
   return (
-    <aside className={`sticky top-[112px] hidden h-[calc(100vh-128px)] shrink-0 flex-col self-start rounded-[22px] bg-vessa-card p-3 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] md:flex ${collapsed ? 'w-[76px]' : 'w-[216px]'}`}>
+    <aside className={`sticky top-[112px] hidden h-[calc(100vh-128px)] shrink-0 flex-col gap-4 self-start md:flex ${collapsed ? 'w-[76px]' : 'w-[216px]'}`}>
+      <div className="rounded-[22px] bg-vessa-card p-3 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
       {collapsed ? (
         <button
           type="button"
@@ -324,7 +351,8 @@ function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, o
         })}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-1 rounded-[22px] bg-[#f3f5f2] p-1.5 dark:bg-[#1c231f]">
+      </div>
+      <div className="mt-auto flex flex-col gap-1 rounded-[22px] bg-vessa-card p-1.5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
         <Link
           to="/"
           title={collapsed ? 'View public site' : undefined}
@@ -944,30 +972,67 @@ export default function Admin() {
 
   // ---- Derived data for the Vessa overview ----
   const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+  const [chartPeriod, setChartPeriod] = useState('daily')
   const chartData = (() => {
-    const days = []
     const now = new Date()
-    for (let i = 9; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
-      const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-      const key = d.toDateString()
-      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59)
-      const dayAccounts = accounts.filter((x) => x.created_at && new Date(x.created_at).toDateString() === key)
-      const total = accounts.filter((x) => x.created_at && new Date(x.created_at) <= dayEnd).length
-      days.push({
-        label,
-        newCount: dayAccounts.length,
-        approvedCount: dayAccounts.filter((x) => x.status === 'active').length,
-        totalCount: total
-      })
+    const buckets = []
+    if (chartPeriod === 'daily') {
+      for (let i = 9; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+        buckets.push({
+          label: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+          start: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
+          end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59)
+        })
+      }
+    } else if (chartPeriod === 'weekly') {
+      const sow = new Date(now)
+      sow.setDate(sow.getDate() - ((sow.getDay() + 6) % 7))
+      sow.setHours(0, 0, 0, 0)
+      for (let i = 9; i >= 0; i--) {
+        const st = new Date(sow.getFullYear(), sow.getMonth(), sow.getDate() - i * 7)
+        buckets.push({
+          label: st.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+          start: st,
+          end: new Date(st.getFullYear(), st.getMonth(), st.getDate() + 6, 23, 59, 59)
+        })
+      }
+    } else {
+      for (let i = 9; i >= 0; i--) {
+        const st = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        buckets.push({
+          label: st.toLocaleDateString('en-GB', { month: 'short' }),
+          start: st,
+          end: new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59)
+        })
+      }
     }
-    return days
+    return buckets.map((bk) => {
+      const inBucket = accounts.filter((x) => {
+        if (!x.created_at) return false
+        const t = new Date(x.created_at)
+        return t >= bk.start && t <= bk.end
+      })
+      const total = accounts.filter((x) => x.created_at && new Date(x.created_at) <= bk.end).length
+      return {
+        label: bk.label,
+        newCount: inBucket.length,
+        approvedCount: inBucket.filter((x) => x.status === 'active').length,
+        totalCount: total
+      }
+    })
   })()
   const monthSignups = accounts.filter((x) => {
     const d = x.created_at ? new Date(x.created_at) : null
     const n = new Date()
     return d && d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth()
   }).length
+  const pendingAccounts = accounts.filter((x) => x.status === 'pending').slice(0, 3)
+  const typeRows = [
+    { label: 'Stores', count: accounts.filter((x) => x.type === 'store').length, bar: 'bg-vessa-copper dark:bg-vessa-peach' },
+    { label: 'Freelancers', count: accounts.filter((x) => x.type === 'freelancer').length, bar: 'bg-vessa-teal dark:bg-vessa-tealLight' },
+    { label: 'Influencers', count: accounts.filter((x) => x.type === 'influencer').length, bar: 'bg-vessa-sky dark:bg-vessa-skyLight' }
+  ]
   const topStores = [...accounts]
     .sort((a, b) => (productCounts[b.id] || 0) - (productCounts[a.id] || 0))
     .slice(0, 3)
@@ -1079,13 +1144,13 @@ export default function Admin() {
             {/* ---------- OVERVIEW (Vessa grid) ---------- */}
             {activeTab === 'overview' && overview && (
               <section className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-6 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '0ms' }}>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="vessa-rise px-1 py-2 md:col-span-2" style={{ animationDelay: '0ms' }}>
                     <p className="flex items-center gap-2 text-xs font-medium text-[#56615a] dark:text-[#a8b4ad]">
                       <span className="h-2 w-2 rounded-full bg-emerald-500" />
                       {todayLabel}
                     </p>
-                    <h1 className="mt-3 text-[34px] font-bold leading-[1.1] tracking-[-0.02em]">Welcome back, Wajid!</h1>
+                    <h1 className="mt-3 text-[38px] font-bold leading-[1.05] tracking-[-0.02em]">Welcome back, Wajid!</h1>
                     <p className="mt-2 text-sm leading-relaxed text-[#56615a] dark:text-[#a8b4ad]">
                       Here is what is happening on your platform today — {overview.pending} account{overview.pending === 1 ? '' : 's'} waiting for approval
                       {openMessages > 0 ? ` and ${openMessages} support message${openMessages === 1 ? '' : 's'} open` : ''}.
@@ -1114,10 +1179,12 @@ export default function Admin() {
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <div className="relative flex items-start justify-between">
                       <p className="text-sm font-medium text-[#56615a] dark:text-[#a8b4ad]">Total accounts</p>
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-vessa-copper/10 text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach"><IUsers className="h-4 w-4" /></span>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-vessa-copper text-white dark:bg-vessa-peach dark:text-[#2b0f03]"><IUsers className="h-4 w-4" /></span>
                     </div>
-                    <p className="relative mt-2 text-[28px] font-bold tabular-nums"><CountUp value={overview.total} /></p>
-                    <p className="relative mt-1 text-xs font-semibold text-[#23804d] dark:text-[#6fd38e]">↗ +{monthSignups} this month</p>
+                    <div className="relative mt-2 flex flex-wrap items-baseline gap-x-2">
+                      <p className="text-[28px] font-bold leading-none tabular-nums"><CountUp value={overview.total} /></p>
+                      <span className="text-xs font-semibold text-[#23804d] dark:text-[#6fd38e]">↗ +{monthSignups} this month</span>
+                    </div>
                     <p className="relative mt-1 text-xs text-[#56615a] dark:text-[#88948d]">{overview.free} free · {overview.paid} paid</p>
                     <Sparkline data={chartData.map((d) => d.totalCount)} stroke="#a8481c" className="relative mt-3 h-8 w-24" />
                   </div>
@@ -1127,10 +1194,12 @@ export default function Admin() {
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <div className="relative flex items-start justify-between">
                       <p className="text-sm font-medium text-[#56615a] dark:text-[#a8b4ad]">Pending approval</p>
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-300"><IAlert className="h-4 w-4" /></span>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#c88a12] text-white dark:bg-[#f2c056] dark:text-[#2b0f03]"><IAlert className="h-4 w-4" /></span>
                     </div>
-                    <p className="relative mt-2 text-[28px] font-bold tabular-nums"><CountUp value={overview.pending} /></p>
-                    <p className="relative mt-1 text-xs font-semibold text-[#93600a] dark:text-[#f2c056]">⚠ {overview.pending} waiting</p>
+                    <div className="relative mt-2 flex flex-wrap items-baseline gap-x-2">
+                      <p className="text-[28px] font-bold leading-none tabular-nums"><CountUp value={overview.pending} /></p>
+                      <span className="text-xs font-semibold text-[#93600a] dark:text-[#f2c056]">⚠ {overview.pending} waiting</span>
+                    </div>
                     <p className="relative mt-1 text-xs text-[#56615a] dark:text-[#88948d]">of {overview.total} accounts</p>
                     <Sparkline data={chartData.map((d) => d.newCount - d.approvedCount)} stroke="#c88a12" className="relative mt-3 h-8 w-24" />
                   </div>
@@ -1140,9 +1209,11 @@ export default function Admin() {
                     <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
                     <div className="relative flex items-start justify-between">
                       <p className="text-sm font-medium text-[#56615a] dark:text-[#a8b4ad]">Products listed</p>
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600/10 text-teal-700 dark:bg-teal-300/15 dark:text-teal-200"><IPackage className="h-4 w-4" /></span>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-vessa-teal text-white dark:bg-vessa-tealLight dark:text-[#0f1412]"><IPackage className="h-4 w-4" /></span>
                     </div>
-                    <p className="relative mt-2 text-[28px] font-bold tabular-nums"><CountUp value={overview.products} /></p>
+                    <div className="relative mt-2 flex flex-wrap items-baseline gap-x-2">
+                      <p className="text-[28px] font-bold leading-none tabular-nums"><CountUp value={overview.products} /></p>
+                    </div>
                     <p className="relative mt-1 text-xs text-[#56615a] dark:text-[#88948d]">Across {accounts.length} store{accounts.length === 1 ? '' : 's'} · {overview.adCount} ad campaign{overview.adCount === 1 ? '' : 's'}</p>
                   </div>
                 </div>
@@ -1154,7 +1225,16 @@ export default function Admin() {
                         <h2 className="text-lg font-semibold">Accounts statistics</h2>
                         <p className="text-xs text-[#56615a] dark:text-[#88948d]">New signups · last 10 days</p>
                       </div>
-                      <span className="rounded-full bg-black/[0.04] px-3 py-1 text-xs font-semibold dark:bg-white/5">Daily</span>
+                      <select
+                        value={chartPeriod}
+                        onChange={(e) => setChartPeriod(e.target.value)}
+                        aria-label="Chart period"
+                        className="cursor-pointer rounded-full bg-black/[0.04] px-3 py-1 text-xs font-semibold outline-none dark:bg-white/5"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
                     </div>
                     <div className="mt-5">
                       <SignupChart data={chartData} />
@@ -1179,9 +1259,16 @@ export default function Admin() {
                         <p className="text-xs text-[#56615a] dark:text-[#88948d]">Pending</p>
                       </div>
                     </div>
-                    <p className="mt-4 rounded-full bg-vessa-copper/10 px-3 py-2 text-center text-xs font-semibold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
-                      {overview.pending} account{overview.pending === 1 ? '' : 's'} waiting for approval
-                    </p>
+                    <div className="mt-5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold">Approval progress</span>
+                        <span className="text-[#56615a] dark:text-[#a8b4ad]">{overview.active} of {overview.total} approved</span>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10">
+                        <div className="h-full rounded-full bg-vessa-copper transition-all duration-1000 dark:bg-vessa-peach" style={{ width: `${overview.total > 0 ? Math.round((overview.active / overview.total) * 100) : 0}%` }} />
+                      </div>
+                      <p className="mt-2 text-center text-xs text-[#56615a] dark:text-[#a8b4ad]">{overview.pending} account{overview.pending === 1 ? '' : 's'} waiting for approval</p>
+                    </div>
                   </div>
                 </div>
 
@@ -1200,8 +1287,21 @@ export default function Admin() {
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold">{a.business_name || '(No name)'}</span>
                               <span className="block truncate text-xs text-[#56615a] dark:text-[#88948d]">{a.email} · /s/{a.slug}</span>
+                              <span className="block text-[11px] text-[#56615a] dark:text-[#88948d]">{timeAgo(a.created_at)}</span>
                             </span>
                             <StatusPill status={a.status} />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('accounts')
+                                setSearch(a.business_name || '')
+                              }}
+                              aria-label={`Open ${a.business_name || 'account'} in Accounts`}
+                              title="Open in Accounts"
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#56615a] hover:bg-black/[0.04] dark:text-[#a8b4ad] dark:hover:bg-white/5"
+                            >
+                              ⋮
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -1253,6 +1353,64 @@ export default function Admin() {
                         ))}
                       </ul>
                     )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)] lg:col-span-2" style={{ animationDelay: '440ms' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-semibold">Approval queue</h2>
+                        <p className="text-xs text-[#56615a] dark:text-[#88948d]">{overview.pending} account{overview.pending === 1 ? '' : 's'} waiting for your decision</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setActiveTab('accounts')
+                          setStatusFilter('pending')
+                        }}
+                        className="shrink-0 text-sm font-semibold text-vessa-copper hover:underline dark:text-vessa-peach"
+                      >
+                        Open board
+                      </button>
+                    </div>
+                    {pendingAccounts.length === 0 ? (
+                      <p className="mt-4 text-sm text-[#56615a] dark:text-[#a8b4ad]">Nothing waiting — every account is decided.</p>
+                    ) : (
+                      <ul className="mt-4 space-y-3">
+                        {pendingAccounts.map((a) => (
+                          <li key={a.id} className="flex flex-wrap items-center gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper/10 text-sm font-bold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
+                              {(a.business_name || '?').slice(0, 1).toUpperCase()}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold">{a.business_name || '(No name)'}</span>
+                              <span className="block truncate text-xs text-[#56615a] dark:text-[#88948d]">{a.email} · /s/{a.slug} · {timeAgo(a.created_at)}</span>
+                            </span>
+                            <span className="flex gap-2">
+                              <button onClick={() => updateAccount(a.id, { status: 'active' })} className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Approve</button>
+                              <button onClick={() => updateAccount(a.id, { status: 'rejected' })} className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-semibold hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5">Reject</button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="vessa-rise rounded-[22px] bg-vessa-card p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]" style={{ animationDelay: '480ms' }}>
+                    <h2 className="text-lg font-semibold">Accounts by type</h2>
+                    <p className="text-xs text-[#56615a] dark:text-[#88948d]">Stores, freelancers &amp; influencers</p>
+                    <div className="mt-4 space-y-4">
+                      {typeRows.map((t) => (
+                        <div key={t.label}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium">{t.label}</span>
+                            <span className="text-xs text-[#56615a] dark:text-[#a8b4ad]">{t.count} of {overview.total}</span>
+                          </div>
+                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10">
+                            <div className={`h-full rounded-full ${t.bar}`} style={{ width: `${overview.total > 0 ? Math.round((t.count / overview.total) * 100) : 0}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </section>
