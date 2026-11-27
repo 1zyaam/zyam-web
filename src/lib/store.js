@@ -11,6 +11,14 @@ export const PLANS = {
   paid: { name: 'Paid', price: 1999, offer: 1199 }
 }
 
+/** How clients pay for the Paid plan: JazzCash, manual verification. */
+export const PAYMENT = {
+  method: 'JazzCash',
+  accountName: 'Wajid Ali',
+  accountNumber: '03240636368',
+  amount: 1199
+}
+
 export const FREEZE_DAYS = 45
 
 /** Whole days between the given date string and now. Returns 0 for missing/invalid dates. */

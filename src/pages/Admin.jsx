@@ -6,6 +6,7 @@ import { PLANS, THEMES, daysSince, timeAgo, FREEZE_DAYS } from '../lib/store.js'
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'accounts', label: 'Accounts' },
+  { id: 'payments', label: 'Payments' },
   { id: 'ads', label: 'Ads' },
   { id: 'support', label: 'Support' }
 ]
@@ -246,6 +247,9 @@ function IMegaphone({ className }) {
 function IChat({ className }) {
   return <SvgIcon className={className} d={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />} />
 }
+function ICard({ className }) {
+  return <SvgIcon className={className} d={<><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></>} />
+}
 function ISearch({ className }) {
   return <SvgIcon className={className} d={<><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></>} />
 }
@@ -283,17 +287,17 @@ function IExternal({ className }) {
   return <SvgIcon className={className} d={<><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>} />
 }
 
-const TAB_ICONS = { overview: IGrid, accounts: IUsers, ads: IMegaphone, support: IChat }
+const TAB_ICONS = { overview: IGrid, accounts: IUsers, payments: ICard, ads: IMegaphone, support: IChat }
 
 /* ---------- Vessa sidebar (own rounded card, sliding active pill) ---------- */
-function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, onToggleCollapse, theme, onToggleTheme, onLogout }) {
+function AdminSidebar({ activeTab, onSelect, pending, openMessages, pendingReceipts, collapsed, onToggleCollapse, theme, onToggleTheme, onLogout }) {
   const navRef = useRef(null)
   const [pill, setPill] = useState({ top: 0, height: 0, show: false })
   useEffect(() => {
     const el = navRef.current?.querySelector(`[data-tab="${activeTab}"]`)
     if (el) setPill({ top: el.offsetTop, height: el.offsetHeight, show: true })
   }, [activeTab, collapsed])
-  const badges = { accounts: pending, support: openMessages }
+  const badges = { accounts: pending, payments: pendingReceipts, support: openMessages }
   return (
     <aside className={`sticky top-[112px] hidden h-[calc(100vh-128px)] shrink-0 flex-col gap-4 self-start md:flex ${collapsed ? 'w-[76px]' : 'w-[216px]'}`}>
       <div className="rounded-[22px] bg-vessa-card p-3 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
@@ -577,6 +581,7 @@ export default function Admin() {
   const [accounts, setAccounts] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [messages, setMessages] = useState([])
+  const [receipts, setReceipts] = useState([])
 
   // ---- Vessa shell state ----
   const [collapsed, setCollapsed] = useState(false)
@@ -773,6 +778,15 @@ export default function Admin() {
     setMessages(data || [])
   }
 
+  async function loadReceipts() {
+    const { data, error: fetchError } = await supabase
+      .from('payment_receipts')
+      .select('*, accounts(business_name, email, slug, plan, status)')
+      .order('created_at', { ascending: false })
+    if (fetchError) throw fetchError
+    setReceipts(data || [])
+  }
+
   async function loadProductCounts() {
     const { data, error: fetchError } = await supabase.from('products').select('account_id')
     if (fetchError) throw fetchError
@@ -787,7 +801,7 @@ export default function Admin() {
     setLoading(true)
     setError('')
     try {
-      await Promise.all([loadOverview(), loadAccounts(), loadCampaigns(), loadMessages(), loadProductCounts()])
+      await Promise.all([loadOverview(), loadAccounts(), loadCampaigns(), loadMessages(), loadReceipts(), loadProductCounts()])
     } catch (err) {
       setError(err.message || 'Could not load admin data.')
     } finally {
@@ -919,6 +933,47 @@ export default function Admin() {
     await loadMessages()
   }
 
+  // ---- Payment receipt actions ----
+  async function verifyReceipt(receipt) {
+    if (!window.confirm(`Verify this payment and approve the Paid plan for "${receipt.accounts?.business_name || receipt.account_id}"?`)) return
+    setError('')
+    setNotice('')
+    const { error: receiptError } = await supabase
+      .from('payment_receipts')
+      .update({ status: 'verified', verified_at: new Date().toISOString() })
+      .eq('id', receipt.id)
+    if (receiptError) {
+      setError(receiptError.message)
+      return
+    }
+    const { error: accountError } = await supabase
+      .from('accounts')
+      .update({ plan: 'paid', status: 'active' })
+      .eq('id', receipt.account_id)
+    if (accountError) {
+      setError(accountError.message)
+      return
+    }
+    setNotice('Payment verified — Paid plan approved.')
+    await Promise.all([loadReceipts(), loadAccounts(), loadOverview()])
+  }
+
+  async function rejectReceipt(receipt) {
+    if (!window.confirm('Reject this payment receipt? The client can upload a new one.')) return
+    setError('')
+    setNotice('')
+    const { error: receiptError } = await supabase
+      .from('payment_receipts')
+      .update({ status: 'rejected' })
+      .eq('id', receipt.id)
+    if (receiptError) {
+      setError(receiptError.message)
+      return
+    }
+    setNotice('Receipt rejected.')
+    await loadReceipts()
+  }
+
   // ---- Derived: filtered accounts ----
   const filteredAccounts = accounts.filter((a) => {
     const q = search.trim().toLowerCase()
@@ -933,6 +988,7 @@ export default function Admin() {
   })
 
   const openMessages = messages.filter((m) => m.status === 'open').length
+  const pendingReceipts = receipts.filter((r) => r.status === 'pending').length
 
   // ---- Render: Supabase not configured ----
   if (!isSupabaseConfigured) {
@@ -1149,6 +1205,14 @@ export default function Admin() {
       sub: 'From the landing-page contact form.',
       onClick: () => setActiveTab('support')
     })
+  if (pendingReceipts > 0)
+    alertItems.push({
+      key: 'payments',
+      tone: 'bg-emerald-500',
+      title: `${pendingReceipts} payment receipt${pendingReceipts === 1 ? '' : 's'} waiting`,
+      sub: 'Verify the receipt and approve the Paid plan.',
+      onClick: () => setActiveTab('payments')
+    })
   if (overview && overview.rejected > 0)
     alertItems.push({
       key: 'rejected',
@@ -1161,7 +1225,7 @@ export default function Admin() {
       }
     })
   const pendingShare = overview && overview.total > 0 ? Math.round((overview.pending / overview.total) * 100) : 0
-  const bellCount = (overview?.pending || 0) + openMessages
+  const bellCount = (overview?.pending || 0) + openMessages + pendingReceipts
 
   // ---- Render: admin panel (Vessa shell) ----
   return (
@@ -1206,6 +1270,7 @@ export default function Admin() {
           }}
           pending={overview?.pending || 0}
           openMessages={openMessages}
+          pendingReceipts={pendingReceipts}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
           theme={adminTheme}
@@ -1759,6 +1824,51 @@ export default function Admin() {
                     )}
                     <button onClick={() => deleteMessage(message.id)} className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>
                   </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'payments' && (
+        <section className="mt-6">
+          {receipts.length === 0 ? (
+            <p className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#56615a] dark:text-[#a8b4ad] ring-1 ring-black/5 dark:ring-white/10">
+              No payment receipts yet. When a client pays via JazzCash and uploads a receipt, it will appear here for verification.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {receipts.map((receipt) => (
+                <li key={receipt.id} className="rounded-[22px] bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{receipt.accounts?.business_name || '(No name)'}{' '}
+                        <span className="font-normal text-[#56615a] dark:text-[#a8b4ad]">· {receipt.accounts?.email || 'no email'}</span>
+                      </p>
+                      <p className="text-xs text-[#56615a] dark:text-[#a8b4ad]">
+                        /s/{receipt.accounts?.slug || '—'} · JazzCash · Rs {Number(receipt.amount || 0).toLocaleString('en-PK')} · {receipt.created_at ? timeAgo(receipt.created_at) : '—'}
+                      </p>
+                    </div>
+                    <StatusPill status={receipt.status === 'verified' ? 'active' : receipt.status === 'rejected' ? 'rejected' : 'pending'} />
+                  </div>
+                  <a href={receipt.receipt_url} target="_blank" rel="noreferrer" className="mt-4 block">
+                    <img src={receipt.receipt_url} alt="Payment receipt" className="max-h-64 rounded-xl ring-1 ring-black/10 dark:ring-white/10" />
+                  </a>
+                  {receipt.status === 'pending' && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button onClick={() => verifyReceipt(receipt)} className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Verify &amp; approve Paid plan</button>
+                      <button onClick={() => rejectReceipt(receipt)} className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Reject receipt</button>
+                    </div>
+                  )}
+                  {receipt.status === 'verified' && (
+                    <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400">
+                      Verified{receipt.verified_at ? ` · ${new Date(receipt.verified_at).toLocaleString()}` : ''} — Paid plan approved.
+                    </p>
+                  )}
+                  {receipt.status === 'rejected' && (
+                    <p className="mt-3 text-xs text-rose-600 dark:text-rose-400">Rejected — the client can upload a new receipt.</p>
+                  )}
                 </li>
               ))}
             </ul>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { FREEZE_DAYS, PLANS, THEMES, daysSince, formatPKR, whatsappLink } from '../lib/store'
+import { FREEZE_DAYS, PAYMENT, PLANS, THEMES, daysSince, formatPKR, timeAgo, whatsappLink } from '../lib/store'
 import SwatchStrip from '../components/SwatchStrip.jsx'
 
 const inputCls =
@@ -26,8 +26,11 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState(false)
   const [savingItem, setSavingItem] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
-  const [upgradeSent, setUpgradeSent] = useState(false)
-  const [upgrading, setUpgrading] = useState(false)
+  const [receipts, setReceipts] = useState([])
+  const [receiptFile, setReceiptFile] = useState(null)
+  const [receiptPreview, setReceiptPreview] = useState('')
+  const [submittingReceipt, setSubmittingReceipt] = useState(false)
+  const [copiedNumber, setCopiedNumber] = useState(false)
   const fileInputRef = useRef(null)
 
   // Settings form state (mirrors the accounts row).
@@ -44,6 +47,19 @@ export default function Dashboard() {
 
   const itemTable = account?.type === 'store' ? 'products' : account?.type === 'freelancer' ? 'projects' : 'bio_links'
   const itemLabel = account?.type === 'store' ? 'product' : account?.type === 'freelancer' ? 'project' : 'link'
+
+  const loadReceipts = useCallback(async (accountId) => {
+    const { data, error: receiptsError } = await supabase
+      .from('payment_receipts')
+      .select('*')
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: false })
+    if (receiptsError) {
+      setLoadError('Could not load your receipts: ' + receiptsError.message)
+      return
+    }
+    setReceipts(data || [])
+  }, [])
 
   const loadItems = useCallback(async (accountId, table) => {
     const { data, error: itemsError } = await supabase
@@ -99,36 +115,67 @@ export default function Dashboard() {
       })
       const table = accountRow.type === 'store' ? 'products' : accountRow.type === 'freelancer' ? 'projects' : 'bio_links'
       await loadItems(accountRow.id, table)
+      await loadReceipts(accountRow.id)
       setCheckingSession(false)
     }
     init()
-  }, [navigate, loadItems])
+  }, [navigate, loadItems, loadReceipts])
 
   async function handleLogout() {
     await supabase.auth.signOut()
     navigate('/', { replace: true })
   }
 
-  async function handleUpgrade() {
-    if (!account) return
-    setError('')
-    setUpgrading(true)
+  async function copyNumber() {
     try {
-      const { error: insertError } = await supabase.from('support_messages').insert({
-        account_id: account.id,
-        name: account.business_name || '',
-        email: account.email || '',
-        message: 'Upgrade request to Paid plan',
-        status: 'open'
-      })
-      if (insertError) {
-        setError('Upgrade request could not be sent: ' + insertError.message)
+      await navigator.clipboard.writeText(PAYMENT.accountNumber)
+      setCopiedNumber(true)
+      setTimeout(() => setCopiedNumber(false), 2000)
+    } catch {
+      setError('Could not copy the number. It is ' + PAYMENT.accountNumber + '.')
+    }
+  }
+
+  function handleReceiptFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setReceiptFile(file)
+    setReceiptPreview(URL.createObjectURL(file))
+    setError('')
+  }
+
+  async function handleSubmitReceipt() {
+    if (!account || !receiptFile) return
+    setError('')
+    setSubmittingReceipt(true)
+    try {
+      const ext = receiptFile.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const receiptPath = `${account.user_id}/${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('payment-receipts')
+        .upload(receiptPath, receiptFile, { upsert: false })
+      if (uploadError) {
+        setError('Receipt upload failed: ' + uploadError.message)
         return
       }
-      setUpgradeSent(true)
-      setNotice('Upgrade request sent. The Zyam Web team will contact you to complete payment for the Paid plan.')
+      const { data } = supabase.storage.from('payment-receipts').getPublicUrl(receiptPath)
+      const { error: insertError } = await supabase.from('payment_receipts').insert({
+        account_id: account.id,
+        amount: PAYMENT.amount,
+        method: 'jazzcash',
+        receipt_url: data.publicUrl,
+        status: 'pending'
+      })
+      if (insertError) {
+        setError('Receipt could not be saved: ' + insertError.message)
+        return
+      }
+      setReceiptFile(null)
+      setReceiptPreview('')
+      await loadReceipts(account.id)
+      setNotice('Receipt submitted. We will verify your payment and approve your Paid plan.')
     } finally {
-      setUpgrading(false)
+      setSubmittingReceipt(false)
     }
   }
 
@@ -319,6 +366,8 @@ export default function Dashboard() {
   const inactiveDays = daysSince(account.last_active_at)
   const daysRemaining = account.plan === 'free' ? Math.max(0, FREEZE_DAYS - inactiveDays) : null
   const plan = PLANS[account.plan] || PLANS.free
+  const pendingReceipt = receipts.find((r) => r.status === 'pending')
+  const lastRejected = receipts.find((r) => r.status === 'rejected')
   const publicUrl = `/s/${account.slug}`
   const wa = whatsappLink(account.whatsapp, `Hi ${account.business_name}!`)
 
@@ -415,18 +464,72 @@ export default function Dashboard() {
                 <strong className="text-ink dark:text-white">{formatPKR(PLANS.paid.offer)} / year</strong> — removes the
                 “Made with Zyam Web” footer and your page never freezes.
               </p>
-              {upgradeSent ? (
-                <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">
-                  Upgrade request sent. The Zyam Web team will contact you to complete payment.
+              <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4 dark:border-night-border dark:bg-night-bg1">
+                <p className="text-sm font-semibold text-ink dark:text-white">
+                  Pay with {PAYMENT.method} — {formatPKR(PAYMENT.amount)} / year
+                </p>
+                <dl className="mt-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted dark:text-brand-200">Account name</dt>
+                    <dd className="font-medium text-ink dark:text-white">{PAYMENT.accountName}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted dark:text-brand-200">JazzCash number</dt>
+                    <dd className="flex items-center gap-2 font-medium text-ink dark:text-white">
+                      {PAYMENT.accountNumber}
+                      <button
+                        type="button"
+                        onClick={copyNumber}
+                        className="rounded-full border border-brand-300 px-2 py-0.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 dark:border-night-border dark:text-brand-300 dark:hover:bg-night-border"
+                      >
+                        {copiedNumber ? 'Copied ✓' : 'Copy'}
+                      </button>
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted dark:text-brand-200">Amount</dt>
+                    <dd className="font-medium text-ink dark:text-white">{formatPKR(PAYMENT.amount)}</dd>
+                  </div>
+                </dl>
+                <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-muted dark:text-brand-200">
+                  <li>Send {formatPKR(PAYMENT.amount)} to the JazzCash number above.</li>
+                  <li>Tap “I have paid” and upload your payment receipt screenshot.</li>
+                  <li>We check the receipt and approve your Paid plan.</li>
+                </ol>
+              </div>
+              {pendingReceipt ? (
+                <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                  Receipt submitted {timeAgo(pendingReceipt.created_at)} — waiting for verification. Your plan becomes
+                  Paid once we verify the payment.
                 </p>
               ) : (
-                <button
-                  onClick={handleUpgrade}
-                  disabled={upgrading || !isSupabaseConfigured}
-                  className="mt-4 rounded-full bg-brand-600 px-6 py-2.5 font-medium text-white shadow-pill transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {upgrading ? 'Sending…' : `Upgrade to Paid — ${formatPKR(PLANS.paid.offer)}/year`}
-                </button>
+                <>
+                  {receiptPreview && (
+                    <img
+                      src={receiptPreview}
+                      alt="Payment receipt preview"
+                      className="mt-4 max-h-48 rounded-xl border border-brand-200 dark:border-night-border"
+                    />
+                  )}
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <label className="cursor-pointer rounded-full border border-brand-300 px-5 py-2.5 text-sm font-medium text-brand-700 hover:bg-brand-50 dark:border-night-border dark:text-brand-300 dark:hover:bg-night-border">
+                      {receiptFile ? 'Change receipt' : 'Upload receipt'}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleReceiptFile} />
+                    </label>
+                    <button
+                      onClick={handleSubmitReceipt}
+                      disabled={!receiptFile || submittingReceipt || !isSupabaseConfigured}
+                      className="rounded-full bg-brand-600 px-6 py-2.5 font-medium text-white shadow-pill transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {submittingReceipt ? 'Submitting…' : 'I have paid — submit receipt'}
+                    </button>
+                  </div>
+                  {lastRejected && (
+                    <p className="mt-3 text-sm text-rose-600 dark:text-rose-300">
+                      Your last receipt was not accepted. Please check the payment and upload a new receipt.
+                    </p>
+                  )}
+                </>
               )}
             </>
           ) : (
