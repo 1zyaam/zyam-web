@@ -63,6 +63,24 @@ body * {
   }
 }
 
+/* ---- Vessa-style entrance + bar grow (admin panel) ---- */
+@keyframes vessa-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.vessa-rise {
+  opacity: 0;
+  animation: vessa-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes vessa-bar {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vessa-rise { animation: none; opacity: 1; }
+}
+
 /* ---- Circular-wipe theme transition (View Transitions API, Chromium) ----
    TopBar sets --wipe-x / --wipe-y to the toggle click point, then toggles
    the `dark` class inside document.startViewTransition(). Browsers without

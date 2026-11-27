@@ -11,18 +11,20 @@ import Admin from './pages/Admin.jsx'
 export default function App() {
   const location = useLocation()
 
-  // Dark mode: persisted choice, default light
+  // Dark mode: persisted choice, default light (the admin panel owns its own theme)
   useEffect(() => {
+    if (location.pathname === '/admin') return
     const saved = localStorage.getItem('zyamweb-theme')
     if (saved === 'dark') document.documentElement.classList.add('dark')
     else document.documentElement.classList.remove('dark')
   }, [location.pathname])
 
   const isStorefront = location.pathname.startsWith('/s/')
+  const isAdmin = location.pathname === '/admin'
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-brand-50 to-[#E9E2FF] dark:from-night-bg1 dark:to-night-bg2 text-ink dark:text-white transition-colors">
-      {!isStorefront && <TopBar />}
+      {!isStorefront && !isAdmin && <TopBar />}
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/signup" element={<SignupWizard />} />

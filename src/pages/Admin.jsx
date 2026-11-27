@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { PLANS, THEMES, daysSince, FREEZE_DAYS } from '../lib/store.js'
@@ -11,7 +11,7 @@ const TABS = [
 ]
 
 const STATUS_STYLES = {
-  pending: 'bg-brand-100 text-brand-700 dark:bg-night-border dark:text-brand-300',
+  pending: 'bg-vessa-copper/10 text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach',
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   frozen: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
   rejected: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
@@ -26,25 +26,453 @@ function StatusPill({ status }) {
   )
 }
 
-function Card({ title, value, sub }) {
+
+
+/* ---------- Vessa-style helpers (copper accent, greige/dark shell) ---------- */
+
+function useAdminTheme() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'dark'
+    return localStorage.getItem('zyamweb-admin-theme') || 'dark'
+  })
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    localStorage.setItem('zyamweb-admin-theme', theme)
+  }, [theme])
+  function toggleTheme(event) {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    const x = event?.clientX ?? window.innerWidth / 2
+    const y = event?.clientY ?? window.innerHeight / 2
+    const root = document.documentElement
+    root.style.setProperty('--wipe-x', `${x}px`)
+    root.style.setProperty('--wipe-y', `${y}px`)
+    if (document.startViewTransition) {
+      document.startViewTransition(() => {
+        document.documentElement.classList.toggle('dark', next === 'dark')
+        setTheme(next)
+      })
+    } else {
+      setTheme(next)
+    }
+  }
+  return { theme, toggleTheme }
+}
+
+function CountUp({ value, prefix = '', suffix = '' }) {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    let raf
+    const start = performance.now()
+    const dur = 1100
+    const tick = (t) => {
+      const p = Math.min(1, (t - start) / dur)
+      setN(Math.round(value * (1 - Math.pow(1 - p, 3))))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value])
+  return <span>{prefix}{n.toLocaleString()}{suffix}</span>
+}
+
+function Sparkline({ data, stroke = '#A8481C', className = '' }) {
+  if (!data || data.length < 2) return null
+  const w = 96
+  const h = 32
+  const max = Math.max(...data, 1)
+  const min = Math.min(...data, 0)
+  const pts = data
+    .map((v, i) => `${(i / (data.length - 1)) * w},${h - 3 - ((v - min) / (max - min || 1)) * (h - 6)}`)
+    .join(' ')
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
-      <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-brand-600 to-brand-800" />
-      <p className="text-sm text-muted dark:text-brand-300">{title}</p>
-      <p className="mt-1 font-display text-3xl font-semibold">{value}</p>
-      {sub ? <p className="mt-1 text-xs text-muted dark:text-brand-300">{sub}</p> : null}
+    <svg viewBox={`0 0 ${w} ${h}`} className={className} aria-hidden="true">
+      <polyline points={pts} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Gauge({ percent, center, label }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(t)
+  }, [])
+  const r = 78
+  const arc = Math.PI * r
+  const p = Math.max(0, Math.min(100, percent))
+  const offset = arc * (1 - (mounted ? p / 100 : 0))
+  const ticks = Array.from({ length: 25 }, (_, i) => {
+    const a = Math.PI - (i / 24) * Math.PI
+    const x1 = 100 + Math.cos(a) * (r + 8)
+    const y1 = 96 - Math.sin(a) * (r + 8)
+    const x2 = 100 + Math.cos(a) * (r + 14)
+    const y2 = 96 - Math.sin(a) * (r + 14)
+    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="1.5" className="text-black/15 dark:text-white/15" />
+  })
+  return (
+    <div className="relative mx-auto w-52">
+      <svg viewBox="0 0 200 108" className="w-full">
+        {ticks}
+        <path d="M 22 96 A 78 78 0 0 1 178 96" fill="none" strokeWidth="10" strokeLinecap="round" className="stroke-black/10 dark:stroke-white/10" />
+        <path d="M 22 96 A 78 78 0 0 1 178 96" fill="none" strokeWidth="10" strokeLinecap="round" className="stroke-vessa-copper transition-all duration-1000 ease-out dark:stroke-vessa-peach" strokeDasharray={arc} strokeDashoffset={offset} />
+      </svg>
+      <div className="absolute inset-x-0 bottom-0 text-center">
+        <p className="font-display text-3xl font-semibold leading-none">{center}</p>
+        <p className="mt-1 text-xs text-[#6B6659] dark:text-white/55">{label}</p>
+      </div>
     </div>
   )
 }
 
-/* Demo-style depth: big soft violet blobs + floating orbs behind the panel,
-   like the light-purple reference (deep violet circle, glass cards). */
-function Backdrop() {
+function SignupChart({ data }) {
+  const [hover, setHover] = useState(null)
+  const max = Math.max(...data.map((d) => d.count), 1)
   return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-20 right-[-8%] h-80 w-80 rounded-full bg-brand-600/25 blur-3xl animate-orb-float" />
-      <div className="absolute top-56 left-[-6%] h-64 w-64 rounded-full bg-brand-400/25 blur-3xl animate-orb-float-slow" />
-      <div className="absolute bottom-10 right-1/4 h-36 w-36 rounded-full bg-brand-500/20 blur-2xl animate-orb-float" />
+    <div>
+      <div className="flex h-44 items-end gap-2">
+        {data.map((d, i) => (
+          <div
+            key={d.label}
+            className="group relative flex h-full flex-1 flex-col justify-end"
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          >
+            {hover === i && (
+              <div className="absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-[#1C1B17] px-2.5 py-1.5 text-xs font-semibold text-white shadow-lg dark:bg-white dark:text-[#1C1B17]">
+                {d.label} · {d.count} new
+              </div>
+            )}
+            <div
+              className={`w-full origin-bottom rounded-t-lg ${hover === i ? 'bg-vessa-copperDark dark:bg-vessa-peachLight' : 'bg-vessa-copper/85 dark:bg-vessa-peach/85'}`}
+              style={{
+                height: `${Math.max(4, (d.count / max) * 100)}%`,
+                animation: 'vessa-bar 0.7s cubic-bezier(0.22,1,0.36,1) backwards',
+                animationDelay: `${i * 60}ms`
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        {data.map((d) => (
+          <span key={d.label} className="flex-1 text-center text-[11px] text-[#6B6659] dark:text-white/45">{d.label}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Icons (inline SVG, lucide-style) ---------- */
+function SvgIcon({ d, className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      {d}
+    </svg>
+  )
+}
+function IGrid({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect width="7" height="9" x="3" y="3" rx="1" />
+      <rect width="7" height="5" x="14" y="3" rx="1" />
+      <rect width="7" height="9" x="14" y="12" rx="1" />
+      <rect width="7" height="5" x="3" y="16" rx="1" />
+    </svg>
+  )
+}
+function IUsers({ className }) {
+  return <SvgIcon className={className} d={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>} />
+}
+function IMegaphone({ className }) {
+  return <SvgIcon className={className} d={<><path d="m3 11 18-5v12L3 14v-3z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>} />
+}
+function IChat({ className }) {
+  return <SvgIcon className={className} d={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />} />
+}
+function ISearch({ className }) {
+  return <SvgIcon className={className} d={<><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></>} />
+}
+function IBell({ className }) {
+  return <SvgIcon className={className} d={<><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></>} />
+}
+function ISun({ className }) {
+  return <SvgIcon className={className} d={<><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></>} />
+}
+function IMoon({ className }) {
+  return <SvgIcon className={className} d={<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />} />
+}
+function IPlus({ className }) {
+  return <SvgIcon className={className} d={<path d="M12 5v14M5 12h14" />} />
+}
+function IRefresh({ className }) {
+  return <SvgIcon className={className} d={<><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></>} />
+}
+function ILogout({ className }) {
+  return <SvgIcon className={className} d={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />
+}
+function IChevron({ className }) {
+  return <SvgIcon className={className} d={<polyline points="6 9 12 15 18 9" />} />
+}
+function ICollapse({ className }) {
+  return <SvgIcon className={className} d={<><polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" /></>} />
+}
+function IPackage({ className }) {
+  return <SvgIcon className={className} d={<><path d="m7.5 4.27 9 5.15" /><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" /></>} />
+}
+function IAlert({ className }) {
+  return <SvgIcon className={className} d={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></>} />
+}
+function IExternal({ className }) {
+  return <SvgIcon className={className} d={<><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>} />
+}
+
+const TAB_ICONS = { overview: IGrid, accounts: IUsers, ads: IMegaphone, support: IChat }
+
+/* ---------- Vessa sidebar (own rounded card, sliding active pill) ---------- */
+function AdminSidebar({ activeTab, onSelect, pending, openMessages, collapsed, onToggleCollapse, theme, onToggleTheme, onLogout }) {
+  const navRef = useRef(null)
+  const [pill, setPill] = useState({ top: 0, height: 0, show: false })
+  useEffect(() => {
+    const el = navRef.current?.querySelector(`[data-tab="${activeTab}"]`)
+    if (el) setPill({ top: el.offsetTop, height: el.offsetHeight, show: true })
+  }, [activeTab, collapsed])
+  const badges = { accounts: pending, support: openMessages }
+  return (
+    <aside className={`sticky top-4 hidden h-[calc(100vh-2rem)] shrink-0 flex-col self-start rounded-3xl bg-vessa-card p-3 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 md:flex ${collapsed ? 'w-[76px]' : 'w-[216px]'}`}>
+      <div className="flex items-center gap-2.5 px-2 pb-2 pt-1">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper font-display text-lg font-bold text-white dark:bg-vessa-peach dark:text-[#221A12]">Z</span>
+        {!collapsed && (
+          <span className="leading-tight">
+            <span className="block text-sm font-bold tracking-wide">ZYAM WEB</span>
+            <span className="block text-[11px] text-[#6B6659] dark:text-white/50">Owner console</span>
+          </span>
+        )}
+      </div>
+
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="mx-auto mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/[0.05] text-[#1C1B17]/70 hover:bg-black/[0.08] dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/15"
+        >
+          {theme === 'dark' ? <ISun className="h-4 w-4" /> : <IMoon className="h-4 w-4" />}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="relative mt-2 flex h-9 items-center justify-between rounded-full bg-black/[0.05] px-1 dark:bg-white/10"
+        >
+          <span className="relative z-10 flex h-7 w-7 items-center justify-center text-[#1C1B17]/70 dark:text-white/60"><ISun className="h-4 w-4" /></span>
+          <span className="relative z-10 flex h-7 w-7 items-center justify-center text-[#1C1B17]/70 dark:text-white/60"><IMoon className="h-4 w-4" /></span>
+          <span aria-hidden="true" className={`absolute top-1 h-7 w-7 rounded-full bg-vessa-card shadow transition-all duration-300 dark:bg-vessa-darkCard ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
+        </button>
+      )}
+
+      <nav ref={navRef} className="relative mt-3 flex flex-col gap-1" aria-label="Admin sections">
+        <span
+          aria-hidden="true"
+          className="absolute left-0 w-full rounded-full bg-vessa-copper transition-all duration-300 dark:bg-vessa-peach"
+          style={{ top: pill.top, height: pill.height, opacity: pill.show ? 1 : 0 }}
+        />
+        {TABS.map((tab) => {
+          const Icon = TAB_ICONS[tab.id]
+          const active = activeTab === tab.id
+          const badge = badges[tab.id] || 0
+          return (
+            <button
+              key={tab.id}
+              data-tab={tab.id}
+              onClick={() => onSelect(tab.id)}
+              aria-current={active ? 'page' : undefined}
+              title={collapsed ? tab.label : undefined}
+              className={`relative z-10 flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-semibold transition-colors ${active ? 'text-white dark:text-[#221A12]' : 'text-[#1C1B17]/75 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/5'} ${collapsed ? 'justify-center px-0' : ''}`}
+            >
+              <Icon className="h-5 w-5 shrink-0" />
+              {!collapsed && <span className="flex-1 text-left">{tab.label}</span>}
+              {!collapsed && badge > 0 && (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${active ? 'bg-white/25 text-white dark:bg-black/15 dark:text-[#221A12]' : 'bg-vessa-copper/10 text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach'}`}>
+                  {badge}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </nav>
+
+      <div className="mt-auto flex flex-col gap-1 pt-3">
+        <Link
+          to="/"
+          title={collapsed ? 'View public site' : undefined}
+          className={`flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium text-[#1C1B17]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
+        >
+          <IExternal className="h-5 w-5 shrink-0" />
+          {!collapsed && <span>View site</span>}
+        </Link>
+        <button
+          type="button"
+          onClick={onLogout}
+          title={collapsed ? 'Log out' : undefined}
+          className={`flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium text-[#1C1B17]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
+        >
+          <ILogout className="h-5 w-5 shrink-0" />
+          {!collapsed && <span>Log out</span>}
+        </button>
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          className={`flex items-center gap-3 rounded-full px-3.5 py-2 text-xs font-medium text-[#6B6659] hover:bg-black/[0.04] dark:text-white/50 dark:hover:bg-white/5 ${collapsed ? 'justify-center px-0' : ''}`}
+        >
+          <ICollapse className={`h-4 w-4 shrink-0 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} />
+          {!collapsed && <span>Collapse</span>}
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+/* ---------- Vessa top bar (floating rounded pill) ---------- */
+const ICON_BTN = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#1C1B17]/70 hover:bg-black/[0.04] dark:text-white/70 dark:hover:bg-white/5'
+const MENU_ITEM = 'block w-full rounded-xl px-3 py-2 text-left text-sm font-medium hover:bg-black/[0.04] dark:hover:bg-white/5'
+
+function AdminTopBar({ title, subtitle, onOpenPalette, onRefresh, bellCount, bellOpen, onToggleBell, alerts, onAlertClick, onNew, adminEmail, accountOpen, onToggleAccount, onLogout }) {
+  return (
+    <header className="sticky top-4 z-40 flex items-center gap-1.5 rounded-full bg-vessa-card/90 px-3 py-2 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 backdrop-blur-md dark:bg-vessa-darkCard/90 dark:ring-white/5">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper font-display text-base font-bold text-white dark:bg-vessa-peach dark:text-[#221A12] md:hidden">Z</span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-display text-lg font-semibold leading-tight">{title}</p>
+        <p className="hidden truncate text-[11px] text-[#6B6659] dark:text-white/50 sm:block">{subtitle}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onOpenPalette}
+        className="hidden items-center gap-2 rounded-full bg-black/[0.04] px-3 py-2 text-sm text-[#6B6659] hover:bg-black/[0.07] dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10 sm:flex"
+      >
+        <ISearch className="h-4 w-4" />
+        <span className="hidden lg:inline">Search</span>
+        <kbd className="rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] font-bold dark:bg-white/15">⌘K</kbd>
+      </button>
+      <button type="button" onClick={onRefresh} aria-label="Refresh" title="Refresh" className={ICON_BTN}>
+        <IRefresh className="h-5 w-5" />
+      </button>
+      <div className="relative">
+        <button type="button" onClick={onToggleBell} aria-label="Notifications" title="Notifications" className={`${ICON_BTN} relative`}>
+          <IBell className="h-5 w-5" />
+          {bellCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{bellCount}</span>
+          )}
+        </button>
+        {bellOpen && (
+          <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-vessa-card p-2 shadow-xl ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/10">
+            <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-[#6B6659] dark:text-white/40">Alerts</p>
+            {alerts.length === 0 ? (
+              <p className="px-2 py-3 text-sm text-[#6B6659] dark:text-white/55">All clear — nothing needs you.</p>
+            ) : (
+              alerts.map((a) => (
+                <button key={a.key} onClick={() => onAlertClick(a)} className="flex w-full items-start gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/5">
+                  <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${a.tone}`} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">{a.title}</span>
+                    <span className="block text-xs text-[#6B6659] dark:text-white/50">{a.sub}</span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onNew}
+        className="hidden items-center gap-1.5 rounded-full bg-vessa-copper px-4 py-2 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight sm:flex"
+      >
+        <IPlus className="h-4 w-4" /> New
+      </button>
+      <div className="relative">
+        <button type="button" onClick={onToggleAccount} className="flex items-center gap-2 rounded-full py-1 pl-1 pr-1.5 hover:bg-black/[0.04] dark:hover:bg-white/5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-vessa-peach text-xs font-bold text-[#221A12]">WA</span>
+          <span className="hidden text-left leading-tight lg:block">
+            <span className="block text-[11px] text-[#6B6659] dark:text-white/50">Good day</span>
+            <span className="block text-sm font-semibold">Wajid Ali</span>
+          </span>
+          <IChevron className="hidden h-4 w-4 text-[#6B6659] dark:text-white/50 lg:block" />
+        </button>
+        {accountOpen && (
+          <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-vessa-card p-2 shadow-xl ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/10">
+            <p className="px-3 py-2 text-xs text-[#6B6659] dark:text-white/50">
+              Signed in as<br />
+              <span className="font-semibold text-[#1C1B17] dark:text-white">{adminEmail}</span>
+            </p>
+            <Link to="/" className={MENU_ITEM}>View public site</Link>
+            <button type="button" onClick={onLogout} className={MENU_ITEM}>Log out</button>
+          </div>
+        )}
+      </div>
+    </header>
+  )
+}
+
+/* ---------- Command palette (⌘K) ---------- */
+function PaletteModal({ open, query, onQuery, onClose, onSelectTab, accounts, onSelectAccount }) {
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [open, onClose])
+  if (!open) return null
+  const q = query.trim().toLowerCase()
+  const matched = q
+    ? accounts
+        .filter((a) => `${a.business_name || ''} ${a.email || ''} ${a.slug || ''}`.toLowerCase().includes(q))
+        .slice(0, 5)
+    : []
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-24 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-vessa-card shadow-2xl ring-1 ring-black/10 dark:bg-vessa-darkCard dark:ring-white/10" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 border-b border-black/5 px-4 py-3 dark:border-white/10">
+          <ISearch className="h-5 w-5 shrink-0 text-[#6B6659] dark:text-white/50" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            placeholder="Search accounts, pages…"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-[#6B6659] dark:placeholder:text-white/40"
+          />
+          <kbd className="shrink-0 rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] font-bold dark:bg-white/15">esc</kbd>
+        </div>
+        <div className="max-h-80 overflow-y-auto p-2">
+          <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-[#6B6659] dark:text-white/40">Pages</p>
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => onSelectTab(t.id)} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium hover:bg-black/[0.04] dark:hover:bg-white/5">
+              {t.label}
+            </button>
+          ))}
+          {matched.length > 0 && (
+            <>
+              <p className="px-2 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-[#6B6659] dark:text-white/40">Accounts</p>
+              {matched.map((a) => (
+                <button key={a.id} onClick={() => onSelectAccount(a)} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm hover:bg-black/[0.04] dark:hover:bg-white/5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-vessa-copper/10 text-xs font-bold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
+                    {(a.business_name || '?').slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{a.business_name || '(No name)'}</span>
+                    <span className="block truncate text-xs text-[#6B6659] dark:text-white/50">{a.email} · /s/{a.slug}</span>
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -70,6 +498,15 @@ export default function Admin() {
   const [accounts, setAccounts] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [messages, setMessages] = useState([])
+
+  // ---- Vessa shell state ----
+  const [collapsed, setCollapsed] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [paletteQuery, setPaletteQuery] = useState('')
+  const [bellOpen, setBellOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [productCounts, setProductCounts] = useState({})
+  const { theme: adminTheme, toggleTheme: toggleAdminTheme } = useAdminTheme()
 
   // Accounts tab filters
   const [search, setSearch] = useState('')
@@ -120,6 +557,19 @@ export default function Admin() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Cmd/Ctrl+K opens the command palette (admin panel only)
+  useEffect(() => {
+    if (gate !== 'admin') return undefined
+    const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [gate])
 
   async function handleSignIn(e) {
     e.preventDefault()
@@ -214,11 +664,21 @@ export default function Admin() {
     setMessages(data || [])
   }
 
+  async function loadProductCounts() {
+    const { data, error: fetchError } = await supabase.from('products').select('account_id')
+    if (fetchError) throw fetchError
+    const counts = {}
+    ;(data || []).forEach((row) => {
+      counts[row.account_id] = (counts[row.account_id] || 0) + 1
+    })
+    setProductCounts(counts)
+  }
+
   async function loadAll() {
     setLoading(true)
     setError('')
     try {
-      await Promise.all([loadOverview(), loadAccounts(), loadCampaigns(), loadMessages()])
+      await Promise.all([loadOverview(), loadAccounts(), loadCampaigns(), loadMessages(), loadProductCounts()])
     } catch (err) {
       setError(err.message || 'Could not load admin data.')
     } finally {
@@ -368,16 +828,15 @@ export default function Admin() {
   // ---- Render: Supabase not configured ----
   if (!isSupabaseConfigured) {
     return (
-      <main className="relative mx-auto max-w-2xl px-4 py-16">
-        <Backdrop />
-        <div className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-8 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl text-center">
+      <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg px-4 py-16 dark:bg-vessa-darkBg">
+        <div className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5 text-center w-full max-w-2xl">
           <h1 className="font-display text-2xl font-semibold">Connect Supabase to enable this</h1>
-          <p className="mt-3 text-muted dark:text-brand-300">
+          <p className="mt-3 text-[#6B6659] dark:text-white/55">
             The admin panel needs a Supabase project. Copy <code>.env.example</code> to <code>.env</code>,
             set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then run the SQL
             migrations in <code>supabase/migrations/</code>. See <code>DEPLOY.md</code> for the steps.
           </p>
-          <Link to="/" className="mt-6 inline-block rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+          <Link to="/" className="mt-6 inline-block rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight">
             Back to home
           </Link>
         </div>
@@ -388,15 +847,14 @@ export default function Admin() {
   // ---- Render: password gate (always first) ----
   if (gate !== 'admin') {
     return (
-      <main className="relative mx-auto max-w-md px-4 py-16">
-        <Backdrop />
-        <div className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-8 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+      <main className="relative flex min-h-screen items-start justify-center bg-vessa-bg px-4 py-16 dark:bg-vessa-darkBg">
+        <div className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-8 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5 w-full max-w-md">
           <h1 className="font-display text-2xl font-semibold">Admin sign in</h1>
-          <p className="mt-2 text-sm text-muted dark:text-brand-300">
+          <p className="mt-2 text-sm text-[#6B6659] dark:text-white/55">
             This area is for the Zyam Web owner only. Sign in with the admin account.
           </p>
           {gate === 'checking' ? (
-            <p className="mt-6 text-sm text-muted dark:text-brand-300">Checking your session…</p>
+            <p className="mt-6 text-sm text-[#6B6659] dark:text-white/55">Checking your session…</p>
           ) : (
             <form onSubmit={handleSignIn} className="mt-6 space-y-4">
               <div>
@@ -407,7 +865,7 @@ export default function Admin() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
+                  className="mt-1 w-full rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50"
                 />
               </div>
               <div>
@@ -419,7 +877,7 @@ export default function Admin() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
-                  className="mt-1 w-full rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
+                  className="mt-1 w-full rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50"
                 />
               </div>
               {gateError && (
@@ -430,108 +888,336 @@ export default function Admin() {
               <button
                 type="submit"
                 disabled={signingIn}
-                className="w-full rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                className="w-full rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight"
               >
                 {signingIn ? 'Signing in…' : 'Sign in as admin'}
               </button>
             </form>
           )}
-          <Link to="/" className="mt-6 inline-block text-sm text-brand-600 hover:underline">← Back to home</Link>
+          <Link to="/" className="mt-6 inline-block text-sm text-vessa-copper dark:text-vessa-peach hover:underline">← Back to home</Link>
         </div>
       </main>
     )
   }
 
-  // ---- Render: admin panel ----
+  // ---- Derived data for the Vessa overview ----
+  const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+  const signupsByDay = (() => {
+    const days = []
+    const now = new Date()
+    for (let i = 9; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+      const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      const key = d.toDateString()
+      const count = accounts.filter((a) => a.created_at && new Date(a.created_at).toDateString() === key).length
+      days.push({ label, count })
+    }
+    return days
+  })()
+  const monthSignups = accounts.filter((a) => {
+    const d = a.created_at ? new Date(a.created_at) : null
+    const n = new Date()
+    return d && d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth()
+  }).length
+  const cumulative = []
+  {
+    let run = (overview?.total || 0) - signupsByDay.reduce((s, d) => s + d.count, 0)
+    signupsByDay.forEach((d) => {
+      run += d.count
+      cumulative.push(run)
+    })
+  }
+  const topStores = [...accounts]
+    .sort((a, b) => (productCounts[b.id] || 0) - (productCounts[a.id] || 0))
+    .slice(0, 3)
+  const recentAccounts = accounts.slice(0, 4)
+  const alertItems = []
+  if (overview && overview.pending > 0)
+    alertItems.push({
+      key: 'pending',
+      tone: 'bg-rose-400',
+      title: `${overview.pending} account${overview.pending === 1 ? '' : 's'} pending approval`,
+      sub: 'Review and approve or reject them.',
+      onClick: () => {
+        setActiveTab('accounts')
+        setStatusFilter('pending')
+      }
+    })
+  if (overview && overview.frozen > 0)
+    alertItems.push({
+      key: 'frozen',
+      tone: 'bg-sky-400',
+      title: `${overview.frozen} frozen account${overview.frozen === 1 ? '' : 's'}`,
+      sub: 'Frozen after 45 days of inactivity.',
+      onClick: () => {
+        setActiveTab('accounts')
+        setStatusFilter('frozen')
+      }
+    })
+  if (openMessages > 0)
+    alertItems.push({
+      key: 'support',
+      tone: 'bg-teal-500',
+      title: `${openMessages} support message${openMessages === 1 ? '' : 's'} open`,
+      sub: 'From the landing-page contact form.',
+      onClick: () => setActiveTab('support')
+    })
+  if (overview && overview.rejected > 0)
+    alertItems.push({
+      key: 'rejected',
+      tone: 'bg-amber-400',
+      title: `${overview.rejected} rejected`,
+      sub: 'Rejected accounts.',
+      onClick: () => {
+        setActiveTab('accounts')
+        setStatusFilter('rejected')
+      }
+    })
+  const pendingShare = overview && overview.total > 0 ? Math.round((overview.pending / overview.total) * 100) : 0
+  const bellCount = (overview?.pending || 0) + openMessages
+  const TAB_SUBTITLES = {
+    overview: 'Your platform at a glance',
+    accounts: 'All stores, freelancers & influencers',
+    ads: 'Campaigns & budgets',
+    support: 'Messages from clients'
+  }
+
+  // ---- Render: admin panel (Vessa shell) ----
   return (
-    <main className="relative mx-auto max-w-6xl px-4 py-8">
-      <Backdrop />
-      <div className="relative">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-semibold">Admin panel</h1>
-          <span aria-hidden="true" className="mt-2 block h-1 w-24 rounded-full bg-gradient-to-r from-brand-500 via-brand-600 to-brand-800" />
-          <p className="mt-2 text-sm text-muted dark:text-brand-300">Signed in as {adminEmail}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadAll}
-            className="rounded-full ring-1 ring-brand-200/60 dark:ring-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-4 py-2 text-sm font-semibold hover:bg-white dark:hover:bg-night-card"
-          >
-            Refresh
-          </button>
-          <button
-            onClick={handleLogout}
-            className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            Log out
-          </button>
-        </div>
-      </header>
+    <div className="min-h-screen bg-vessa-bg text-[#1C1B17] dark:bg-vessa-darkBg dark:text-white">
+      <div className="mx-auto flex max-w-[1400px] gap-4 p-3 sm:p-4">
+        <AdminSidebar
+          activeTab={activeTab}
+          onSelect={(id) => {
+            setActiveTab(id)
+            setBellOpen(false)
+            setAccountOpen(false)
+          }}
+          pending={overview?.pending || 0}
+          openMessages={openMessages}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((v) => !v)}
+          theme={adminTheme}
+          onToggleTheme={toggleAdminTheme}
+          onLogout={handleLogout}
+        />
+        <div className="min-w-0 flex-1">
+          <AdminTopBar
+            title={TABS.find((t) => t.id === activeTab)?.label || 'Overview'}
+            subtitle={TAB_SUBTITLES[activeTab] || ''}
+            onOpenPalette={() => setPaletteOpen(true)}
+            onRefresh={loadAll}
+            bellCount={bellCount}
+            bellOpen={bellOpen}
+            onToggleBell={() => {
+              setBellOpen((v) => !v)
+              setAccountOpen(false)
+            }}
+            alerts={alertItems}
+            onAlertClick={(a) => {
+              setBellOpen(false)
+              a.onClick()
+            }}
+            onNew={() => setActiveTab('ads')}
+            adminEmail={adminEmail}
+            accountOpen={accountOpen}
+            onToggleAccount={() => {
+              setAccountOpen((v) => !v)
+              setBellOpen(false)
+            }}
+            onLogout={handleLogout}
+          />
 
-      {error && (
-        <p role="alert" className="mt-4 rounded-xl bg-rose-50 dark:bg-rose-900/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p>
-      )}
-      {notice && (
-        <p role="status" className="mt-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>
-      )}
+          <main className="mt-4 pb-24 md:pb-8">
+            {error && (
+              <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</p>
+            )}
+            {notice && (
+              <p role="status" className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{notice}</p>
+            )}
+            {loading && <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">Loading…</p>}
 
-      {/* Tabs — each switches to its own content, active tab highlighted */}
-      <nav className="mt-6 flex flex-wrap gap-2" aria-label="Admin sections">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            aria-current={activeTab === tab.id ? 'page' : undefined}
-            className={`rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
-              activeTab === tab.id
-                ? 'bg-brand-600 text-white shadow-pill'
-                : 'bg-white/75 dark:bg-night-card/80 text-ink dark:text-white ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl hover:bg-white dark:hover:bg-night-card'
-            }`}
-          >
-            {tab.label}
-            {tab.id === 'support' && openMessages > 0 ? ` (${openMessages} open)` : ''}
-            {tab.id === 'accounts' && overview?.pending > 0 ? ` (${overview.pending} pending)` : ''}
-          </button>
-        ))}
-      </nav>
+            {/* ---------- OVERVIEW (Vessa grid) ---------- */}
+            {activeTab === 'overview' && overview && (
+              <section className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="vessa-rise rounded-3xl bg-vessa-card p-6 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '0ms' }}>
+                    <p className="flex items-center gap-2 text-xs font-medium text-[#6B6659] dark:text-white/55">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      {todayLabel}
+                    </p>
+                    <h1 className="mt-3 font-display text-[28px] font-semibold leading-tight">Welcome back, Wajid!</h1>
+                    <p className="mt-2 text-sm leading-relaxed text-[#6B6659] dark:text-white/55">
+                      Here is what is happening on your platform today — {overview.pending} account{overview.pending === 1 ? '' : 's'} waiting for approval
+                      {openMessages > 0 ? ` and ${openMessages} support message${openMessages === 1 ? '' : 's'} open` : ''}.
+                    </p>
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => {
+                          setActiveTab('accounts')
+                          setStatusFilter('pending')
+                        }}
+                        className="rounded-full bg-vessa-copper px-4 py-2 text-sm font-semibold text-white hover:bg-vessa-copperDark dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight"
+                      >
+                        Review pending
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('ads')}
+                        className="rounded-full px-4 py-2 text-sm font-semibold ring-1 ring-black/15 hover:bg-black/[0.03] dark:ring-white/20 dark:hover:bg-white/5"
+                      >
+                        New campaign
+                      </button>
+                    </div>
+                  </div>
 
-      {loading && <p className="mt-8 text-sm text-muted dark:text-brand-300">Loading…</p>}
+                  <div className="vessa-rise relative overflow-hidden rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '60ms' }}>
+                    <span aria-hidden="true" className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
+                    <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
+                    <div className="relative flex items-start justify-between">
+                      <p className="text-sm font-medium text-[#6B6659] dark:text-white/55">Total accounts</p>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-vessa-copper/10 text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach"><IUsers className="h-4 w-4" /></span>
+                    </div>
+                    <p className="relative mt-2 font-display text-4xl font-semibold tabular-nums"><CountUp value={overview.total} /></p>
+                    <p className="relative mt-1 text-xs text-[#6B6659] dark:text-white/50">{overview.free} free · {overview.paid} paid</p>
+                    <Sparkline data={cumulative} stroke="#A8481C" className="relative mt-3 h-8 w-24" />
+                  </div>
 
-      {/* ---------- OVERVIEW ---------- */}
-      {activeTab === 'overview' && overview && (
-        <section className="mt-6 space-y-6">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Card title="Total accounts" value={overview.total} />
-            <Card title="Free plan" value={overview.free} sub={`${PLANS.free.name} plan`} />
-            <Card title="Paid plan" value={overview.paid} sub={`${PLANS.paid.name} plan`} />
-            <Card title="Active accounts" value={overview.active} />
-          </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Card title="Pending approval" value={overview.pending} />
-            <Card title="Frozen accounts" value={overview.frozen} />
-            <Card title="Rejected" value={overview.rejected} />
-            <Card title="Banned" value={overview.banned} />
-          </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Card title="Products" value={overview.products} />
-            <Card title="Projects" value={overview.projects} />
-            <Card title="Bio links" value={overview.links} />
-            <Card title="Ad campaigns" value={overview.adCount} />
-          </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Card title="Total ad budget" value={`Rs ${overview.adBudget.toLocaleString()}`} />
-            <Card title="Total ad spend" value={`Rs ${overview.adSpend.toLocaleString()}`} />
-            <Card title="Ad impressions" value={overview.adImpressions.toLocaleString()} />
-            <Card title="Ad clicks" value={overview.adClicks.toLocaleString()} />
-          </div>
-          <p className="text-sm text-muted dark:text-brand-300">
-            Free accounts freeze after {FREEZE_DAYS} days of inactivity. Re-login unfreezes them.
-          </p>
-        </section>
-      )}
+                  <div className="vessa-rise relative overflow-hidden rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '120ms' }}>
+                    <span aria-hidden="true" className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
+                    <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
+                    <div className="relative flex items-start justify-between">
+                      <p className="text-sm font-medium text-[#6B6659] dark:text-white/55">Pending approval</p>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-300"><IAlert className="h-4 w-4" /></span>
+                    </div>
+                    <p className="relative mt-2 font-display text-4xl font-semibold tabular-nums"><CountUp value={overview.pending} /></p>
+                    <p className="relative mt-1 text-xs text-[#6B6659] dark:text-white/50">Needs your review</p>
+                    <Sparkline data={signupsByDay.map((d) => d.count)} stroke="#DAB167" className="relative mt-3 h-8 w-24" />
+                  </div>
 
-      {/* ---------- ACCOUNTS ---------- */}
+                  <div className="vessa-rise relative overflow-hidden rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '180ms' }}>
+                    <span aria-hidden="true" className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
+                    <span aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full border-[10px] border-black/[0.03] dark:border-white/[0.04]" />
+                    <div className="relative flex items-start justify-between">
+                      <p className="text-sm font-medium text-[#6B6659] dark:text-white/55">Products listed</p>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600/10 text-teal-700 dark:bg-teal-300/15 dark:text-teal-200"><IPackage className="h-4 w-4" /></span>
+                    </div>
+                    <p className="relative mt-2 font-display text-4xl font-semibold tabular-nums"><CountUp value={overview.products} /></p>
+                    <p className="relative mt-1 text-xs text-[#6B6659] dark:text-white/50">Across {accounts.length} store{accounts.length === 1 ? '' : 's'} · {overview.adCount} ad campaign{overview.adCount === 1 ? '' : 's'}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <div className="vessa-rise rounded-3xl bg-vessa-card p-6 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5 lg:col-span-2" style={{ animationDelay: '220ms' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="font-display text-lg font-semibold">Accounts statistics</h2>
+                        <p className="text-xs text-[#6B6659] dark:text-white/50">New signups · last 10 days</p>
+                      </div>
+                      <span className="rounded-full bg-black/[0.04] px-3 py-1 text-xs font-semibold dark:bg-white/5">Daily</span>
+                    </div>
+                    <div className="mt-5">
+                      <SignupChart data={signupsByDay} />
+                    </div>
+                    <p className="mt-4 border-t border-black/5 pt-3 text-sm text-[#6B6659] dark:border-white/10 dark:text-white/55">
+                      This month so far: <strong className="text-[#1C1B17] dark:text-white">{monthSignups} new account{monthSignups === 1 ? '' : 's'}</strong> · {overview.pending} pending approval
+                    </p>
+                  </div>
+
+                  <div className="vessa-rise rounded-3xl bg-vessa-card p-6 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '280ms' }}>
+                    <h2 className="font-display text-lg font-semibold">Approval progress</h2>
+                    <div className="mt-4">
+                      <Gauge percent={pendingShare} center={`${pendingShare}%`} label="Pending review" />
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-center">
+                      <div>
+                        <p className="text-2xl font-bold tabular-nums">{overview.active}</p>
+                        <p className="text-xs text-[#6B6659] dark:text-white/50">Active</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold tabular-nums">{overview.pending}</p>
+                        <p className="text-xs text-[#6B6659] dark:text-white/50">Pending</p>
+                      </div>
+                    </div>
+                    <p className="mt-4 rounded-full bg-vessa-copper/10 px-3 py-2 text-center text-xs font-semibold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
+                      {overview.pending} account{overview.pending === 1 ? '' : 's'} waiting for approval
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <div className="vessa-rise rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '320ms' }}>
+                    <h2 className="font-display text-lg font-semibold">Recent accounts</h2>
+                    {recentAccounts.length === 0 ? (
+                      <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">No accounts yet.</p>
+                    ) : (
+                      <ul className="mt-4 space-y-3">
+                        {recentAccounts.map((a) => (
+                          <li key={a.id} className="flex items-center gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper/10 text-sm font-bold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
+                              {(a.business_name || '?').slice(0, 1).toUpperCase()}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold">{a.business_name || '(No name)'}</span>
+                              <span className="block truncate text-xs text-[#6B6659] dark:text-white/50">{a.email} · /s/{a.slug}</span>
+                            </span>
+                            <StatusPill status={a.status} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <button onClick={() => setActiveTab('accounts')} className="mt-4 text-sm font-semibold text-vessa-copper hover:underline dark:text-vessa-peach">
+                      View all accounts →
+                    </button>
+                  </div>
+
+                  <div className="vessa-rise rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '360ms' }}>
+                    <h2 className="font-display text-lg font-semibold">Alerts &amp; notifications</h2>
+                    {alertItems.length === 0 ? (
+                      <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">All clear — nothing needs you.</p>
+                    ) : (
+                      <div className="mt-3 space-y-1">
+                        {alertItems.map((a) => (
+                          <button key={a.key} onClick={a.onClick} className="flex w-full items-start gap-3 rounded-2xl px-2 py-2.5 text-left hover:bg-black/[0.03] dark:hover:bg-white/5">
+                            <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${a.tone}`} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold">{a.title}</span>
+                              <span className="block text-xs text-[#6B6659] dark:text-white/50">{a.sub}</span>
+                            </span>
+                            <span className="text-[#6B6659] dark:text-white/40">›</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="vessa-rise rounded-3xl bg-vessa-card p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:bg-vessa-darkCard dark:ring-white/5" style={{ animationDelay: '400ms' }}>
+                    <h2 className="font-display text-lg font-semibold">Top stores</h2>
+                    <p className="text-xs text-[#6B6659] dark:text-white/50">By products listed</p>
+                    {topStores.length === 0 || topStores.every((a) => (productCounts[a.id] || 0) === 0) ? (
+                      <p className="mt-4 text-sm text-[#6B6659] dark:text-white/55">No products listed yet.</p>
+                    ) : (
+                      <ul className="mt-4 space-y-3">
+                        {topStores.map((a, i) => (
+                          <li key={a.id} className="flex items-center gap-3">
+                            <span className="w-5 shrink-0 text-sm font-bold text-[#6B6659] dark:text-white/40">0{i + 1}</span>
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vessa-copper/10 text-sm font-bold text-vessa-copper dark:bg-vessa-peach/15 dark:text-vessa-peach">
+                              {(a.business_name || '?').slice(0, 1).toUpperCase()}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold">{a.business_name || '(No name)'}</span>
+                              <span className="block truncate text-xs text-[#6B6659] dark:text-white/50">/s/{a.slug} · {a.type}</span>
+                            </span>
+                            <span className="shrink-0 text-sm font-bold tabular-nums">{productCounts[a.id] || 0} <span className="text-xs font-medium text-[#6B6659] dark:text-white/50">items</span></span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+                  {/* ---------- ACCOUNTS ---------- */}
       {activeTab === 'accounts' && (
         <section className="mt-6">
           <div className="flex flex-wrap gap-3">
@@ -541,13 +1227,13 @@ export default function Admin() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by business name, email or slug…"
               aria-label="Search accounts"
-              className="min-w-0 flex-1 rounded-xl border border-brand-200 dark:border-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
+              className="min-w-0 flex-1 rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-vessa-darkCard px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50"
             />
             <select
               value={planFilter}
               onChange={(e) => setPlanFilter(e.target.value)}
               aria-label="Filter by plan"
-              className="rounded-xl border border-brand-200 dark:border-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-3 py-2.5 text-sm"
+              className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-vessa-darkCard px-3 py-2.5 text-sm"
             >
               <option value="all">All plans</option>
               <option value="free">{PLANS.free.name}</option>
@@ -557,7 +1243,7 @@ export default function Admin() {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               aria-label="Filter by status"
-              className="rounded-xl border border-brand-200 dark:border-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-3 py-2.5 text-sm"
+              className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-vessa-darkCard px-3 py-2.5 text-sm"
             >
               <option value="all">All statuses</option>
               <option value="pending">Pending</option>
@@ -569,7 +1255,7 @@ export default function Admin() {
           </div>
 
           {filteredAccounts.length === 0 ? (
-            <p className="mt-8 rounded-3xl bg-white/75 dark:bg-night-card/80 p-6 text-center text-sm text-muted dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+            <p className="mt-8 rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#6B6659] dark:text-white/55 ring-1 ring-black/5 dark:ring-white/10">
               No accounts match this search. Try a different search or filter.
             </p>
           ) : (
@@ -577,14 +1263,14 @@ export default function Admin() {
               {filteredAccounts.map((account) => {
                 const inactiveDays = account.last_active_at ? daysSince(account.last_active_at) : null
                 return (
-                  <li key={account.id} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+                  <li key={account.id} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold">{account.business_name || '(No business name)'}</p>
-                        <p className="text-sm text-muted dark:text-brand-300">
+                        <p className="text-sm text-[#6B6659] dark:text-white/55">
                           {account.email} · /s/{account.slug} · {account.type} · {THEMES[account.theme]?.name || account.theme || 'Lavender'}
                         </p>
-                        <p className="mt-1 text-xs text-muted dark:text-brand-300">
+                        <p className="mt-1 text-xs text-[#6B6659] dark:text-white/55">
                           Plan: <strong>{PLANS[account.plan]?.name || account.plan}</strong>
                           {account.last_active_at
                             ? ` · Last active ${new Date(account.last_active_at).toLocaleDateString()} (${inactiveDays} days ago${account.plan === 'free' ? `, ${Math.max(0, FREEZE_DAYS - inactiveDays)} days left before freeze` : ', never freezes'})`
@@ -598,7 +1284,7 @@ export default function Admin() {
                           to={`/s/${account.slug}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="rounded-full border border-brand-200 dark:border-night-border px-3 py-1.5 text-xs font-semibold hover:bg-brand-50 dark:hover:bg-night-bg1"
+                          className="rounded-full border border-black/10 dark:border-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-black/[0.03] dark:hover:bg-white/5"
                         >
                           Open public page
                         </Link>
@@ -627,9 +1313,9 @@ export default function Admin() {
                         <button onClick={() => updateAccount(account.id, { status: 'active' }, 'Account approved and activated.')} className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Approve</button>
                       )}
                       {account.plan === 'free' ? (
-                        <button onClick={() => updateAccount(account.id, { plan: 'paid' }, 'Plan set to Paid.')} className="rounded-full border border-brand-300 px-3.5 py-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-night-bg1">Set plan: Paid</button>
+                        <button onClick={() => updateAccount(account.id, { plan: 'paid' }, 'Plan set to Paid.')} className="rounded-full border border-vessa-copper/40 dark:border-vessa-peach/40 px-3.5 py-1.5 text-xs font-semibold text-vessa-copper dark:text-vessa-peach hover:bg-black/[0.03] dark:hover:bg-white/5">Set plan: Paid</button>
                       ) : (
-                        <button onClick={() => updateAccount(account.id, { plan: 'free' }, 'Plan set to Free.')} className="rounded-full border border-brand-300 px-3.5 py-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-night-bg1">Set plan: Free</button>
+                        <button onClick={() => updateAccount(account.id, { plan: 'free' }, 'Plan set to Free.')} className="rounded-full border border-vessa-copper/40 dark:border-vessa-peach/40 px-3.5 py-1.5 text-xs font-semibold text-vessa-copper dark:text-vessa-peach hover:bg-black/[0.03] dark:hover:bg-white/5">Set plan: Free</button>
                       )}
                       <button onClick={() => deleteAccount(account.id, account.business_name || account.slug)} className="rounded-full border border-red-300 px-3.5 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>
                     </div>
@@ -641,10 +1327,10 @@ export default function Admin() {
         </section>
       )}
 
-      {/* ---------- ADS ---------- */}
+                  {/* ---------- ADS ---------- */}
       {activeTab === 'ads' && (
         <section className="mt-6 space-y-6">
-          <form onSubmit={createCampaign} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+          <form onSubmit={createCampaign} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
             <h2 className="font-display text-lg font-semibold">Create campaign</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
               <input
@@ -654,13 +1340,13 @@ export default function Admin() {
                 onChange={(e) => setNewAd({ ...newAd, title: e.target.value })}
                 placeholder="Campaign title"
                 aria-label="Campaign title"
-                className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400 md:col-span-2"
+                className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50 md:col-span-2"
               />
               <select
                 value={newAd.placement}
                 onChange={(e) => setNewAd({ ...newAd, placement: e.target.value })}
                 aria-label="Ad placement"
-                className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm"
+                className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm"
               >
                 <option value="storefront-top">Storefront top</option>
                 <option value="storefront-bottom">Storefront bottom</option>
@@ -675,26 +1361,26 @@ export default function Admin() {
                 onChange={(e) => setNewAd({ ...newAd, budget: e.target.value })}
                 placeholder="Budget (Rs)"
                 aria-label="Budget in rupees"
-                className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
+                className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50"
               />
             </div>
             <button
               type="submit"
               disabled={savingAd}
-              className="mt-4 rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              className="mt-4 rounded-full bg-vessa-copper px-5 py-2.5 text-sm font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight"
             >
               {savingAd ? 'Creating…' : 'Create campaign'}
             </button>
           </form>
 
           {campaigns.length === 0 ? (
-            <p className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-6 text-center text-sm text-muted dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+            <p className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#6B6659] dark:text-white/55 ring-1 ring-black/5 dark:ring-white/10">
               No ad campaigns yet. Create one above.
             </p>
           ) : (
             <ul className="space-y-3">
               {campaigns.map((campaign) => (
-                <li key={campaign.id} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+                <li key={campaign.id} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
                   {editingId === campaign.id ? (
                     <div className="grid gap-3 md:grid-cols-4">
                       <input
@@ -702,13 +1388,13 @@ export default function Admin() {
                         value={editAd.title}
                         onChange={(e) => setEditAd({ ...editAd, title: e.target.value })}
                         aria-label="Edit campaign title"
-                        className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400 md:col-span-2"
+                        className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50 md:col-span-2"
                       />
                       <select
                         value={editAd.placement}
                         onChange={(e) => setEditAd({ ...editAd, placement: e.target.value })}
                         aria-label="Edit placement"
-                        className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm"
+                        className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm"
                       >
                         <option value="storefront-top">Storefront top</option>
                         <option value="storefront-bottom">Storefront bottom</option>
@@ -721,11 +1407,11 @@ export default function Admin() {
                         value={editAd.budget}
                         onChange={(e) => setEditAd({ ...editAd, budget: e.target.value })}
                         aria-label="Edit budget"
-                        className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-bg1 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
+                        className="rounded-xl border border-black/10 dark:border-white/10 bg-vessa-card dark:bg-white/5 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-vessa-copper/50 dark:focus:ring-vessa-peach/50"
                       />
                       <div className="flex gap-2 md:col-span-4">
-                        <button onClick={() => saveEdit(campaign.id)} disabled={savingAd} className="rounded-full bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60">Save</button>
-                        <button onClick={() => setEditingId(null)} className="rounded-full border border-brand-200 dark:border-night-border px-4 py-2 text-xs font-semibold">Cancel</button>
+                        <button onClick={() => saveEdit(campaign.id)} disabled={savingAd} className="rounded-full bg-vessa-copper px-4 py-2 text-xs font-semibold text-white hover:bg-vessa-copperDark disabled:opacity-60 dark:bg-vessa-peach dark:text-[#221A12] dark:hover:bg-vessa-peachLight">Save</button>
+                        <button onClick={() => setEditingId(null)} className="rounded-full border border-black/10 dark:border-white/10 px-4 py-2 text-xs font-semibold">Cancel</button>
                       </div>
                     </div>
                   ) : (
@@ -733,17 +1419,17 @@ export default function Admin() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold">{campaign.title}</p>
-                          <p className="text-sm text-muted dark:text-brand-300">
+                          <p className="text-sm text-[#6B6659] dark:text-white/55">
                             Placement: {campaign.placement} · Created {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : '—'}
                           </p>
                         </div>
                         <StatusPill status={campaign.status === 'running' ? 'active' : 'pending'} />
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                        <p><span className="text-muted dark:text-brand-300">Budget</span><br /><strong>Rs {Number(campaign.budget || 0).toLocaleString()}</strong></p>
-                        <p><span className="text-muted dark:text-brand-300">Spend</span><br /><strong>Rs {Number(campaign.spend || 0).toLocaleString()}</strong></p>
-                        <p><span className="text-muted dark:text-brand-300">Impressions</span><br /><strong>{Number(campaign.impressions || 0).toLocaleString()}</strong></p>
-                        <p><span className="text-muted dark:text-brand-300">Clicks</span><br /><strong>{Number(campaign.clicks || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#6B6659] dark:text-white/55">Budget</span><br /><strong>Rs {Number(campaign.budget || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#6B6659] dark:text-white/55">Spend</span><br /><strong>Rs {Number(campaign.spend || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#6B6659] dark:text-white/55">Impressions</span><br /><strong>{Number(campaign.impressions || 0).toLocaleString()}</strong></p>
+                        <p><span className="text-[#6B6659] dark:text-white/55">Clicks</span><br /><strong>{Number(campaign.clicks || 0).toLocaleString()}</strong></p>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button
@@ -752,7 +1438,7 @@ export default function Admin() {
                         >
                           {campaign.status === 'running' ? 'Pause' : 'Start'}
                         </button>
-                        <button onClick={() => startEdit(campaign)} className="rounded-full border border-brand-200 dark:border-night-border px-4 py-2 text-xs font-semibold hover:bg-brand-50 dark:hover:bg-night-bg1">Edit</button>
+                        <button onClick={() => startEdit(campaign)} className="rounded-full border border-black/10 dark:border-white/10 px-4 py-2 text-xs font-semibold hover:bg-black/[0.03] dark:hover:bg-white/5">Edit</button>
                         <button onClick={() => deleteCampaign(campaign.id, campaign.title)} className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>
                       </div>
                     </>
@@ -764,21 +1450,21 @@ export default function Admin() {
         </section>
       )}
 
-      {/* ---------- SUPPORT ---------- */}
+                  {/* ---------- SUPPORT ---------- */}
       {activeTab === 'support' && (
         <section className="mt-6">
           {messages.length === 0 ? (
-            <p className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-6 text-center text-sm text-muted dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+            <p className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-6 text-center text-sm text-[#6B6659] dark:text-white/55 ring-1 ring-black/5 dark:ring-white/10">
               No support messages yet. Messages from the landing-page contact form and plan-upgrade requests will appear here.
             </p>
           ) : (
             <ul className="space-y-3">
               {messages.map((message) => (
-                <li key={message.id} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+                <li key={message.id} className="rounded-3xl bg-vessa-card dark:bg-vessa-darkCard p-5 shadow-[0_2px_14px_rgba(20,21,19,0.07)] ring-1 ring-black/5 dark:ring-white/5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold">{message.name || '(No name)'} <span className="font-normal text-muted dark:text-brand-300">· {message.email || 'no email'}</span></p>
-                      <p className="text-xs text-muted dark:text-brand-300">
+                      <p className="font-semibold">{message.name || '(No name)'} <span className="font-normal text-[#6B6659] dark:text-white/55">· {message.email || 'no email'}</span></p>
+                      <p className="text-xs text-[#6B6659] dark:text-white/55">
                         {message.created_at ? new Date(message.created_at).toLocaleString() : '—'}
                       </p>
                     </div>
@@ -789,7 +1475,7 @@ export default function Admin() {
                     {message.status === 'open' ? (
                       <button onClick={() => setMessageStatus(message.id, 'resolved')} className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Mark resolved</button>
                     ) : (
-                      <button onClick={() => setMessageStatus(message.id, 'open')} className="rounded-full border border-brand-200 dark:border-night-border px-4 py-2 text-xs font-semibold hover:bg-brand-50 dark:hover:bg-night-bg1">Reopen</button>
+                      <button onClick={() => setMessageStatus(message.id, 'open')} className="rounded-full border border-black/10 dark:border-white/10 px-4 py-2 text-xs font-semibold hover:bg-black/[0.03] dark:hover:bg-white/5">Reopen</button>
                     )}
                     <button onClick={() => deleteMessage(message.id)} className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>
                   </div>
@@ -799,7 +1485,64 @@ export default function Admin() {
           )}
         </section>
       )}
+
+          </main>
+        </div>
       </div>
-    </main>
+
+      {/* Mobile bottom nav (Vessa shell has no global TopBar on /admin) */}
+      <nav aria-label="Mobile admin navigation" className="fixed inset-x-3 bottom-3 z-50 flex items-center justify-around rounded-full bg-vessa-card/95 px-2 py-2 shadow-xl ring-1 ring-black/5 backdrop-blur-md dark:bg-vessa-darkCard/95 dark:ring-white/10 md:hidden">
+        {TABS.map((tab) => {
+          const Icon = TAB_ICONS[tab.id]
+          const active = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={active ? 'page' : undefined}
+              className={`flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium ${active ? 'text-vessa-copper dark:text-vessa-peach' : 'text-[#1C1B17]/70 dark:text-white/70'}`}
+            >
+              <Icon className="h-5 w-5" />
+              {tab.label}
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          onClick={toggleAdminTheme}
+          aria-label={adminTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-[#1C1B17]/70 dark:text-white/70"
+        >
+          {adminTheme === 'dark' ? <ISun className="h-5 w-5" /> : <IMoon className="h-5 w-5" />}
+          Theme
+        </button>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-[#1C1B17]/70 dark:text-white/70"
+        >
+          <ILogout className="h-5 w-5" />
+          Log out
+        </button>
+      </nav>
+
+      <PaletteModal
+        open={paletteOpen}
+        query={paletteQuery}
+        onQuery={setPaletteQuery}
+        onClose={() => setPaletteOpen(false)}
+        onSelectTab={(id) => {
+          setActiveTab(id)
+          setPaletteOpen(false)
+        }}
+        accounts={accounts}
+        onSelectAccount={(a) => {
+          setActiveTab('accounts')
+          setSearch(a.business_name || '')
+          setPaletteOpen(false)
+        }}
+      />
+    </div>
   )
 }

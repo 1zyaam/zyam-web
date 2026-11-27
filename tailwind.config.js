@@ -18,6 +18,21 @@ export default {
           800: '#5B21B6',
           900: '#4C1D95'
         },
+        // Vessa-style dashboard palette (copper accent, warm greige / near-black)
+        vessa: {
+          bg: '#E7E5DF',
+          card: '#FCFDFC',
+          copper: '#A8481C',
+          copperDark: '#8F3A17',
+          peach: '#FFA77A',
+          peachLight: '#FFB98F',
+          teal: '#5399AE',
+          tealLight: '#80CADE',
+          amber: '#DAB167',
+          amberLight: '#F6D590',
+          darkBg: '#141513',
+          darkCard: '#171D1A'
+        },
         ink: '#1E1B2E',
         muted: '#6B6580',
         night: {
