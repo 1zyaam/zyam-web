@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [editingId, setEditingId] = useState(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null)
   const [form, setForm] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [savingItem, setSavingItem] = useState(false)
@@ -288,7 +289,7 @@ export default function Dashboard() {
   }
 
   async function deleteItem(id) {
-    if (!window.confirm('Delete this item? This cannot be undone.')) return
+    setDeleteConfirmId(null)
     const { error: deleteError } = await supabase.from(itemTable).delete().eq('id', id)
     if (deleteError) {
       setError('Could not delete: ' + deleteError.message)
@@ -691,9 +692,21 @@ export default function Dashboard() {
                 <button onClick={() => startEdit(item)} className="rounded-full border border-brand-300 px-4 py-1.5 text-sm font-medium text-ink hover:bg-brand-50 dark:border-night-border dark:text-white dark:hover:bg-night-bg1">
                   Edit
                 </button>
-                <button onClick={() => deleteItem(item.id)} className="rounded-full border border-rose-300 px-4 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950">
-                  Delete
-                </button>
+                {deleteConfirmId === item.id ? (
+                  <span className="flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm dark:border-amber-700 dark:bg-amber-950">
+                    <span className="font-medium text-amber-800 dark:text-amber-200">Delete this item?</span>
+                    <button onClick={() => deleteItem(item.id)} className="font-semibold text-rose-600 hover:underline">
+                      Yes, delete
+                    </button>
+                    <button onClick={() => setDeleteConfirmId(null)} className="font-medium text-ink hover:underline dark:text-white">
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button onClick={() => setDeleteConfirmId(item.id)} className="rounded-full border border-rose-300 px-4 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950">
+                    Delete
+                  </button>
+                )}
               </li>
             ))}
           </ul>
