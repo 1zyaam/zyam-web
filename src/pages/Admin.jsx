@@ -582,6 +582,7 @@ export default function Admin() {
   const [campaigns, setCampaigns] = useState([])
   const [messages, setMessages] = useState([])
   const [receipts, setReceipts] = useState([])
+  const [receiptConfirm, setReceiptConfirm] = useState(null)
 
   // ---- Vessa shell state ----
   const [collapsed, setCollapsed] = useState(false)
@@ -935,7 +936,6 @@ export default function Admin() {
 
   // ---- Payment receipt actions ----
   async function verifyReceipt(receipt) {
-    if (!window.confirm(`Verify this payment and approve the Paid plan for "${receipt.accounts?.business_name || receipt.account_id}"?`)) return
     setError('')
     setNotice('')
     const { error: receiptError } = await supabase
@@ -959,7 +959,6 @@ export default function Admin() {
   }
 
   async function rejectReceipt(receipt) {
-    if (!window.confirm('Reject this payment receipt? The client can upload a new one.')) return
     setError('')
     setNotice('')
     const { error: receiptError } = await supabase
@@ -1856,10 +1855,29 @@ export default function Admin() {
                     <img src={receipt.receipt_url} alt="Payment receipt" className="max-h-64 rounded-xl ring-1 ring-black/10 dark:ring-white/10" />
                   </a>
                   {receipt.status === 'pending' && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button onClick={() => verifyReceipt(receipt)} className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Verify &amp; approve Paid plan</button>
-                      <button onClick={() => rejectReceipt(receipt)} className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Reject receipt</button>
-                    </div>
+                    receiptConfirm?.id === receipt.id ? (
+                      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950">
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                          {receiptConfirm.action === 'verify'
+                            ? `Verify this payment and approve the Paid plan for "${receipt.accounts?.business_name || 'this account'}"?`
+                            : 'Reject this payment receipt? The client can upload a new one.'}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => { const c = receiptConfirm; setReceiptConfirm(null); if (c.action === 'verify') verifyReceipt(receipt); else rejectReceipt(receipt) }}
+                            className={receiptConfirm.action === 'verify' ? 'rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700' : 'rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700'}
+                          >
+                            {receiptConfirm.action === 'verify' ? 'Yes, verify & approve' : 'Yes, reject receipt'}
+                          </button>
+                          <button onClick={() => setReceiptConfirm(null)} className="rounded-full border border-brand-300 px-4 py-2 text-xs font-semibold text-ink hover:bg-brand-50 dark:border-night-border dark:text-white dark:hover:bg-night-border">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button onClick={() => setReceiptConfirm({ id: receipt.id, action: 'verify' })} className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Verify &amp; approve Paid plan</button>
+                        <button onClick={() => setReceiptConfirm({ id: receipt.id, action: 'reject' })} className="rounded-full border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Reject receipt</button>
+                      </div>
+                    )
                   )}
                   {receipt.status === 'verified' && (
                     <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400">
