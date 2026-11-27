@@ -63,6 +63,41 @@ body * {
   }
 }
 
+/* ---- Logo motion (Z mark: pop-in + gentle float + hover glow) ---- */
+@keyframes logo-pop {
+  0% { transform: scale(0.55) rotate(-16deg); opacity: 0; }
+  60% { transform: scale(1.1) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.5px); }
+}
+@keyframes logo-word-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.logo-mark,
+.logo-mark-copper {
+  animation: logo-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards, logo-float 4.5s ease-in-out 0.8s infinite;
+  will-change: transform;
+  transition: filter 0.25s ease, box-shadow 0.25s ease;
+}
+.logo-mark:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18), 0 8px 20px -8px rgba(124, 58, 237, 0.45);
+}
+.logo-mark-copper:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 0 0 4px rgba(168, 72, 28, 0.22), 0 8px 20px -8px rgba(168, 72, 28, 0.45);
+}
+.logo-word {
+  animation: logo-word-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark, .logo-mark-copper, .logo-word { animation: none; }
+}
+
 /* ---- Vessa-style entrance + bar grow (admin panel) ---- */
 @keyframes vessa-rise {
   from { opacity: 0; transform: translateY(14px); }

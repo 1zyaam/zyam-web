@@ -46,11 +46,11 @@ export default function Logo({ onTripleTap }) {
     >
       <span
         aria-hidden="true"
-        className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-100 via-brand-200 to-brand-300 shadow-pill ring-1 ring-brand-300/60 dark:ring-night-border"
+        className="logo-mark flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-100 via-brand-200 to-brand-300 shadow-pill ring-1 ring-brand-300/60 dark:ring-night-border"
       >
         <span className="font-display text-[22px] font-bold leading-none text-brand-900">Z</span>
       </span>
-      <span className="font-display text-lg font-semibold tracking-wide text-ink dark:text-white">
+      <span className="logo-word font-display text-lg font-semibold tracking-wide text-ink dark:text-white">
         ZYAM&nbsp;WEB
       </span>
     </button>
