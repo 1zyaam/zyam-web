@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Logo from './Logo.jsx'
+import { supabase } from '../lib/supabase'
 
 const NAV_LINKS = [
   { to: '/', label: 'Home' },
@@ -35,6 +36,44 @@ export default function TopBar() {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
+  // ---- Auth state: hide Login / Sign up once signed in ----
+  const [sessionUser, setSessionUser] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setSessionUser(data?.session?.user || null)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) setSessionUser(session?.user || null)
+    })
+    return () => {
+      mounted = false
+      listener?.subscription?.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!sessionUser) {
+      setIsAdmin(false)
+      return
+    }
+    supabase
+      .from('settings')
+      .select('admin_user_id')
+      .eq('id', 1)
+      .single()
+      .then(({ data }) => {
+        setIsAdmin(!!data?.admin_user_id && data.admin_user_id === sessionUser.id)
+      })
+  }, [sessionUser])
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    navigate('/')
+  }
+
   function toggleTheme(event) {
     const next = theme === 'dark' ? 'light' : 'dark'
     const x = event?.clientX ?? window.innerWidth / 2
@@ -60,7 +99,7 @@ export default function TopBar() {
           <Logo onTripleTap={() => navigate('/admin')} />
 
           <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
-            {NAV_LINKS.map((link) => (
+            {NAV_LINKS.filter((link) => !sessionUser || (link.to !== '/login' && link.to !== '/signup')).map((link) => (
               <Link
                 key={link.label}
                 to={link.to}
@@ -90,18 +129,38 @@ export default function TopBar() {
                 </svg>
               )}
             </button>
-            <Link
-              to="/login"
-              className="hidden rounded-full px-3 py-2 text-sm font-medium text-ink/80 hover:text-brand-700 dark:text-white/80 dark:hover:text-white sm:block"
-            >
-              Log in
-            </Link>
-            <Link
-              to="/signup"
-              className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-pill transition-colors hover:bg-brand-700"
-            >
-              Get started
-            </Link>
+            {sessionUser ? (
+              <>
+                <Link
+                  to={isAdmin ? '/admin' : '/dashboard'}
+                  className="hidden rounded-full px-3 py-2 text-sm font-medium text-ink/80 hover:text-brand-700 dark:text-white/80 dark:hover:text-white sm:block"
+                >
+                  {isAdmin ? 'Admin panel' : 'Dashboard'}
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-pill transition-colors hover:bg-brand-700"
+                >
+                  Log out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="hidden rounded-full px-3 py-2 text-sm font-medium text-ink/80 hover:text-brand-700 dark:text-white/80 dark:hover:text-white sm:block"
+                >
+                  Log in
+                </Link>
+                <Link
+                  to="/signup"
+                  className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-pill transition-colors hover:bg-brand-700"
+                >
+                  Get started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -118,20 +177,48 @@ export default function TopBar() {
           </svg>
           Home
         </Link>
-        <Link to="/signup" className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-ink dark:text-white">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Create
-        </Link>
-        <Link to="/login" className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-ink dark:text-white">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
-            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-            <polyline points="10 17 15 12 10 7" />
-            <line x1="15" x2="3" y1="12" y2="12" />
-          </svg>
-          Log in
-        </Link>
+        {sessionUser ? (
+          <>
+            <Link to={isAdmin ? '/admin' : '/dashboard'} className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-ink dark:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                <rect width="7" height="9" x="3" y="3" rx="1" />
+                <rect width="7" height="5" x="14" y="3" rx="1" />
+                <rect width="7" height="9" x="14" y="12" rx="1" />
+                <rect width="7" height="5" x="3" y="16" rx="1" />
+              </svg>
+              {isAdmin ? 'Admin' : 'Dashboard'}
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-ink dark:text-white"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" x2="9" y1="12" y2="12" />
+              </svg>
+              Log out
+            </button>
+          </>
+        ) : (
+          <>
+            <Link to="/signup" className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-ink dark:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Create
+            </Link>
+            <Link to="/login" className="flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-ink dark:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <polyline points="10 17 15 12 10 7" />
+                <line x1="15" x2="3" y1="12" y2="12" />
+              </svg>
+              Log in
+            </Link>
+          </>
+        )}
         <button
           type="button"
           onClick={toggleTheme}

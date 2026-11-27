@@ -28,10 +28,23 @@ function StatusPill({ status }) {
 
 function Card({ title, value, sub }) {
   return (
-    <div className="rounded-2xl bg-white dark:bg-night-card p-5 shadow-card border border-brand-100 dark:border-night-border">
+    <div className="relative overflow-hidden rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
+      <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-brand-600 to-brand-800" />
       <p className="text-sm text-muted dark:text-brand-300">{title}</p>
       <p className="mt-1 font-display text-3xl font-semibold">{value}</p>
       {sub ? <p className="mt-1 text-xs text-muted dark:text-brand-300">{sub}</p> : null}
+    </div>
+  )
+}
+
+/* Demo-style depth: big soft violet blobs + floating orbs behind the panel,
+   like the light-purple reference (deep violet circle, glass cards). */
+function Backdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute -top-20 right-[-8%] h-80 w-80 rounded-full bg-brand-600/25 blur-3xl animate-orb-float" />
+      <div className="absolute top-56 left-[-6%] h-64 w-64 rounded-full bg-brand-400/25 blur-3xl animate-orb-float-slow" />
+      <div className="absolute bottom-10 right-1/4 h-36 w-36 rounded-full bg-brand-500/20 blur-2xl animate-orb-float" />
     </div>
   )
 }
@@ -355,8 +368,9 @@ export default function Admin() {
   // ---- Render: Supabase not configured ----
   if (!isSupabaseConfigured) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-16">
-        <div className="rounded-2xl bg-white dark:bg-night-card p-8 shadow-card border border-brand-100 dark:border-night-border text-center">
+      <main className="relative mx-auto max-w-2xl px-4 py-16">
+        <Backdrop />
+        <div className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-8 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl text-center">
           <h1 className="font-display text-2xl font-semibold">Connect Supabase to enable this</h1>
           <p className="mt-3 text-muted dark:text-brand-300">
             The admin panel needs a Supabase project. Copy <code>.env.example</code> to <code>.env</code>,
@@ -374,8 +388,9 @@ export default function Admin() {
   // ---- Render: password gate (always first) ----
   if (gate !== 'admin') {
     return (
-      <main className="mx-auto max-w-md px-4 py-16">
-        <div className="rounded-2xl bg-white dark:bg-night-card p-8 shadow-card border border-brand-100 dark:border-night-border">
+      <main className="relative mx-auto max-w-md px-4 py-16">
+        <Backdrop />
+        <div className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-8 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
           <h1 className="font-display text-2xl font-semibold">Admin sign in</h1>
           <p className="mt-2 text-sm text-muted dark:text-brand-300">
             This area is for the Zyam Web owner only. Sign in with the admin account.
@@ -429,16 +444,19 @@ export default function Admin() {
 
   // ---- Render: admin panel ----
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <main className="relative mx-auto max-w-6xl px-4 py-8">
+      <Backdrop />
+      <div className="relative">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold">Admin panel</h1>
-          <p className="mt-1 text-sm text-muted dark:text-brand-300">Signed in as {adminEmail}</p>
+          <span aria-hidden="true" className="mt-2 block h-1 w-24 rounded-full bg-gradient-to-r from-brand-500 via-brand-600 to-brand-800" />
+          <p className="mt-2 text-sm text-muted dark:text-brand-300">Signed in as {adminEmail}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={loadAll}
-            className="rounded-full border border-brand-200 dark:border-night-border bg-white dark:bg-night-card px-4 py-2 text-sm font-semibold hover:bg-brand-50 dark:hover:bg-night-bg1"
+            className="rounded-full ring-1 ring-brand-200/60 dark:ring-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-4 py-2 text-sm font-semibold hover:bg-white dark:hover:bg-night-card"
           >
             Refresh
           </button>
@@ -468,7 +486,7 @@ export default function Admin() {
             className={`rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
               activeTab === tab.id
                 ? 'bg-brand-600 text-white shadow-pill'
-                : 'bg-white dark:bg-night-card text-ink dark:text-white border border-brand-200 dark:border-night-border hover:bg-brand-50 dark:hover:bg-night-bg1'
+                : 'bg-white/75 dark:bg-night-card/80 text-ink dark:text-white ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl hover:bg-white dark:hover:bg-night-card'
             }`}
           >
             {tab.label}
@@ -523,13 +541,13 @@ export default function Admin() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by business name, email or slug…"
               aria-label="Search accounts"
-              className="min-w-0 flex-1 rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
+              className="min-w-0 flex-1 rounded-xl border border-brand-200 dark:border-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
             />
             <select
               value={planFilter}
               onChange={(e) => setPlanFilter(e.target.value)}
               aria-label="Filter by plan"
-              className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-card px-3 py-2.5 text-sm"
+              className="rounded-xl border border-brand-200 dark:border-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-3 py-2.5 text-sm"
             >
               <option value="all">All plans</option>
               <option value="free">{PLANS.free.name}</option>
@@ -539,7 +557,7 @@ export default function Admin() {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               aria-label="Filter by status"
-              className="rounded-xl border border-brand-200 dark:border-night-border bg-white dark:bg-night-card px-3 py-2.5 text-sm"
+              className="rounded-xl border border-brand-200 dark:border-night-border bg-white/75 dark:bg-night-card/80 backdrop-blur-xl px-3 py-2.5 text-sm"
             >
               <option value="all">All statuses</option>
               <option value="pending">Pending</option>
@@ -551,7 +569,7 @@ export default function Admin() {
           </div>
 
           {filteredAccounts.length === 0 ? (
-            <p className="mt-8 rounded-2xl bg-white dark:bg-night-card p-6 text-center text-sm text-muted dark:text-brand-300 border border-brand-100 dark:border-night-border">
+            <p className="mt-8 rounded-3xl bg-white/75 dark:bg-night-card/80 p-6 text-center text-sm text-muted dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
               No accounts match this search. Try a different search or filter.
             </p>
           ) : (
@@ -559,7 +577,7 @@ export default function Admin() {
               {filteredAccounts.map((account) => {
                 const inactiveDays = account.last_active_at ? daysSince(account.last_active_at) : null
                 return (
-                  <li key={account.id} className="rounded-2xl bg-white dark:bg-night-card p-5 shadow-card border border-brand-100 dark:border-night-border">
+                  <li key={account.id} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold">{account.business_name || '(No business name)'}</p>
@@ -626,7 +644,7 @@ export default function Admin() {
       {/* ---------- ADS ---------- */}
       {activeTab === 'ads' && (
         <section className="mt-6 space-y-6">
-          <form onSubmit={createCampaign} className="rounded-2xl bg-white dark:bg-night-card p-5 shadow-card border border-brand-100 dark:border-night-border">
+          <form onSubmit={createCampaign} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
             <h2 className="font-display text-lg font-semibold">Create campaign</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
               <input
@@ -670,13 +688,13 @@ export default function Admin() {
           </form>
 
           {campaigns.length === 0 ? (
-            <p className="rounded-2xl bg-white dark:bg-night-card p-6 text-center text-sm text-muted dark:text-brand-300 border border-brand-100 dark:border-night-border">
+            <p className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-6 text-center text-sm text-muted dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
               No ad campaigns yet. Create one above.
             </p>
           ) : (
             <ul className="space-y-3">
               {campaigns.map((campaign) => (
-                <li key={campaign.id} className="rounded-2xl bg-white dark:bg-night-card p-5 shadow-card border border-brand-100 dark:border-night-border">
+                <li key={campaign.id} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
                   {editingId === campaign.id ? (
                     <div className="grid gap-3 md:grid-cols-4">
                       <input
@@ -750,13 +768,13 @@ export default function Admin() {
       {activeTab === 'support' && (
         <section className="mt-6">
           {messages.length === 0 ? (
-            <p className="rounded-2xl bg-white dark:bg-night-card p-6 text-center text-sm text-muted dark:text-brand-300 border border-brand-100 dark:border-night-border">
+            <p className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-6 text-center text-sm text-muted dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
               No support messages yet. Messages from the landing-page contact form and plan-upgrade requests will appear here.
             </p>
           ) : (
             <ul className="space-y-3">
               {messages.map((message) => (
-                <li key={message.id} className="rounded-2xl bg-white dark:bg-night-card p-5 shadow-card border border-brand-100 dark:border-night-border">
+                <li key={message.id} className="rounded-3xl bg-white/75 dark:bg-night-card/80 p-5 shadow-[0_12px_40px_rgba(76,29,149,0.12)] ring-1 ring-brand-200/60 dark:ring-night-border backdrop-blur-xl">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold">{message.name || '(No name)'} <span className="font-normal text-muted dark:text-brand-300">· {message.email || 'no email'}</span></p>
@@ -781,6 +799,7 @@ export default function Admin() {
           )}
         </section>
       )}
+      </div>
     </main>
   )
 }
