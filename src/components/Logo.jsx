@@ -18,7 +18,7 @@ export default function Logo({ onTripleTap }) {
 
   function handleClick() {
     const now = Date.now()
-    tapsRef.current = [...tapsRef.current, now].filter((t) => now - t <= 900)
+    tapsRef.current = [...tapsRef.current, now].filter((t) => now - t <= 1500)
 
     if (tapsRef.current.length >= 3) {
       tapsRef.current = []

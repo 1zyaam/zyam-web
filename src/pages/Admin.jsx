@@ -390,6 +390,7 @@ const ICON_BTN = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full
 const MENU_ITEM = 'block w-full rounded-xl px-3 py-2 text-left text-sm font-medium hover:bg-black/[0.04] dark:hover:bg-white/5'
 
 function AdminTopBar({ activeTab, onSelect, onOpenPalette, onRefresh, bellCount, bellOpen, onToggleBell, alerts, onAlertClick, onNew, adminEmail, accountOpen, onToggleAccount, onLogout }) {
+  const navigate = useNavigate()
   return (
     <header className="sticky top-4 z-40 flex h-20 items-center gap-2 rounded-full bg-vessa-card/90 px-4 shadow-[0_1px_2px_rgba(20,36,28,0.04),0_14px_34px_-22px_rgba(20,36,28,0.28)] ring-1 ring-black/5 backdrop-blur-md dark:bg-vessa-darkCard/90 dark:ring-white/5 dark:shadow-[0_18px_40px_-26px_rgba(0,0,0,0.85)]">
       <div className="flex min-w-0 items-center gap-2.5">
