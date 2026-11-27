@@ -1,9 +1,9 @@
 export const THEMES = {
-  lavender:   { name: 'Lavender',   swatch: ['#F5F0FF', '#7C3AED'], primary: '#7C3AED', soft: '#EDE9FE' },
-  emerald:    { name: 'Emerald',    swatch: ['#ECFDF5', '#059669'], primary: '#059669', soft: '#D1FAE5' },
-  terracotta: { name: 'Terracotta', swatch: ['#FFF7ED', '#C2410C'], primary: '#C2410C', soft: '#FFEDD5' },
-  ocean:      { name: 'Ocean',      swatch: ['#EFF6FF', '#2563EB'], primary: '#2563EB', soft: '#DBEAFE' },
-  rose:       { name: 'Rose',       swatch: ['#FFF1F2', '#E11D48'], primary: '#E11D48', soft: '#FFE4E6' }
+  lavender:   { name: 'Lavender',   swatch: ['#F5F0FF', '#7C3AED'], primary: '#7C3AED', soft: '#EDE9FE', dark: '#17112E' },
+  emerald:    { name: 'Emerald',    swatch: ['#ECFDF5', '#059669'], primary: '#059669', soft: '#D1FAE5', dark: '#0B1F17' },
+  terracotta: { name: 'Terracotta', swatch: ['#FFF7ED', '#C2410C'], primary: '#C2410C', soft: '#FFEDD5', dark: '#221210' },
+  ocean:      { name: 'Ocean',      swatch: ['#EFF6FF', '#2563EB'], primary: '#2563EB', soft: '#DBEAFE', dark: '#0E1B2E' },
+  rose:       { name: 'Rose',       swatch: ['#FFF1F2', '#E11D48'], primary: '#E11D48', soft: '#FFE4E6', dark: '#220F16' }
 }
 
 export const PLANS = {

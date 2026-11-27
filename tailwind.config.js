@@ -46,8 +46,8 @@ export default {
       },
       fontFamily: {
         vessa: ['Urbanist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        sans: ['"Instrument Sans"', 'system-ui', 'sans-serif'],
-        display: ['Fraunces', 'Georgia', 'serif'],
+        sans: ['Urbanist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Urbanist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         josefin: ['"Josefin Sans"', 'sans-serif']
       },
       boxShadow: {

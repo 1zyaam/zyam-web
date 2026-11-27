@@ -39,6 +39,7 @@ export default function Dashboard() {
     tagline: '',
     description: '',
     whatsapp: '',
+    address: '',
     theme: 'lavender',
     accent: '',
     social_links: []
@@ -109,6 +110,7 @@ export default function Dashboard() {
         tagline: accountRow.tagline || '',
         description: accountRow.description || '',
         whatsapp: accountRow.whatsapp || '',
+        address: accountRow.address || '',
         theme: accountRow.theme || 'lavender',
         accent: accountRow.accent || (THEMES[accountRow.theme]?.primary ?? THEMES.lavender.primary),
         social_links: Array.isArray(accountRow.social_links) ? accountRow.social_links : []
@@ -311,6 +313,7 @@ export default function Dashboard() {
           tagline: settings.tagline.trim(),
           description: settings.description.trim(),
           whatsapp: settings.whatsapp.trim(),
+          address: settings.address.trim(),
           theme: settings.theme,
           accent: settings.accent || null,
           social_links: settings.social_links
@@ -716,6 +719,11 @@ export default function Dashboard() {
           <div>
             <label htmlFor="dash-whatsapp" className="block text-sm font-medium text-ink dark:text-white">WhatsApp number</label>
             <input id="dash-whatsapp" type="tel" value={settings.whatsapp} onChange={(e) => setSettings({ ...settings, whatsapp: e.target.value })} className={`${inputCls} mt-1`} />
+          </div>
+          <div>
+            <label htmlFor="dash-address" className="block text-sm font-medium text-ink dark:text-white">Store / office address</label>
+            <input id="dash-address" value={settings.address} onChange={(e) => setSettings({ ...settings, address: e.target.value })} placeholder="e.g. Main Jhang Road, Faisalabad" className={`${inputCls} mt-1`} />
+            <p className="mt-1 text-xs text-muted dark:text-brand-200">Shown on your public page with a directions button.</p>
           </div>
           <div>
             <span className="block text-sm font-medium text-ink dark:text-white">Theme</span>
