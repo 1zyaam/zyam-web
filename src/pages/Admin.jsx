@@ -583,6 +583,9 @@ export default function Admin() {
   const [planFilter, setPlanFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
 
+  // Chart period (must live with the other hooks — above the gate early-return)
+  const [chartPeriod, setChartPeriod] = useState('daily')
+
   // Ads tab form state
   const [newAd, setNewAd] = useState({ title: '', placement: 'storefront-top', budget: '' })
   const [editingId, setEditingId] = useState(null)
@@ -972,7 +975,6 @@ export default function Admin() {
 
   // ---- Derived data for the Vessa overview ----
   const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
-  const [chartPeriod, setChartPeriod] = useState('daily')
   const chartData = (() => {
     const now = new Date()
     const buckets = []
